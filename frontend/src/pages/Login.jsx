@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Car, Mail, Lock, LogIn, Zap, Building2, X, KeyRound, CheckCircle2 } from 'lucide-react';
+import { Car, Mail, Lock, LogIn, X, KeyRound, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
 import api from '../services/api';
@@ -9,9 +9,34 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, demoLogin } = useAuth();
   const { addNotification } = useNotification();
   const navigate = useNavigate();
+
+  const handleDemoClick = async (role) => {
+    setLoading(true);
+    const res = await demoLogin(role);
+    setLoading(false);
+
+    if (res.success) {
+      addNotification({
+        title: 'Hackathon Demo Access',
+        message: `Authenticated via backend as ${role === 'owner' ? 'Owner Demo (PARK-A-LOT Demo Parking)' : 'Civilian Demo'}`,
+        type: 'success'
+      });
+      if (res.user && res.user.role === 'owner') {
+        navigate('/owner');
+      } else {
+        navigate('/');
+      }
+    } else {
+      addNotification({
+        title: 'Demo Access Failure',
+        message: res.error,
+        type: 'error'
+      });
+    }
+  };
 
   // Forgot Password Modal State
   const [showForgotModal, setShowForgotModal] = useState(false);
@@ -25,7 +50,7 @@ export default function Login() {
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
-    const res = await login(email, password);
+    const res = await login(email.trim(), password);
     setLoading(false);
 
     if (res.success) {
@@ -35,8 +60,8 @@ export default function Login() {
         type: 'success'
       });
       
-      // Route based on role
-      if (email.includes('owner') || (res.user && res.user.role === 'owner')) {
+      // Role-based authorization route strictly from backend JWT user record
+      if (res.user && res.user.role === 'owner') {
         navigate('/owner');
       } else {
         navigate('/');
@@ -50,46 +75,12 @@ export default function Login() {
     }
   };
 
-  const handleQuickCivilianLogin = async () => {
-    setEmail('demo@smartpark.in');
-    setPassword('Demo@123');
-    setLoading(true);
-    const res = await login('demo@smartpark.in', 'Demo@123');
-    setLoading(false);
-
-    if (res.success) {
-      addNotification({
-        title: 'Civilian Demo Logged In',
-        message: 'Logged in as Civilian User (demo@smartpark.in)',
-        type: 'success'
-      });
-      navigate('/');
-    }
-  };
-
-  const handleQuickOwnerLogin = async () => {
-    setEmail('owner@smartpark.com');
-    setPassword('password123');
-    setLoading(true);
-    const res = await login('owner@smartpark.com', 'password123');
-    setLoading(false);
-
-    if (res.success) {
-      addNotification({
-        title: 'Owner Portal Access Granted',
-        message: 'Logged in as Parking Lot Owner (owner@smartpark.com)',
-        type: 'success'
-      });
-      navigate('/owner');
-    }
-  };
-
   const handleForgotRequest = async (e) => {
     e.preventDefault();
     if (!forgotEmail) return;
     setForgotLoading(true);
     try {
-      const res = await api.post('/auth/forgot-password', { email: forgotEmail });
+      const res = await api.post('/auth/forgot-password', { email: forgotEmail.trim() });
       setResetToken(res.data.reset_token || 'demo_token_123');
       setForgotStep(2);
       addNotification({
@@ -122,7 +113,7 @@ export default function Login() {
     setForgotLoading(true);
     try {
       const res = await api.post('/auth/reset-password', {
-        email: forgotEmail,
+        email: forgotEmail.trim(),
         reset_token: resetToken,
         new_password: newPassword
       });
@@ -133,7 +124,7 @@ export default function Login() {
         type: 'success'
       });
 
-      setEmail(forgotEmail);
+      setEmail(forgotEmail.trim());
       setPassword(newPassword);
       setShowForgotModal(false);
       setForgotStep(1);
@@ -157,51 +148,14 @@ export default function Login() {
           <Car className="w-8 h-8 text-[#171717]" />
         </div>
         <h1 className="text-3xl font-extrabold text-[#171717] tracking-tight">PARK-A-LOT</h1>
-        <p className="text-xs text-slate-500 font-medium">Smart parking & owner management system.</p>
-      </div>
-
-      {/* Demo Account Shortcuts (Civilian + Owner) */}
-      <div className="p-4 rounded-3xl bg-amber-50 border border-amber-300 space-y-3 shadow-xs">
-        <div className="flex items-center justify-between text-xs text-amber-950 font-bold">
-          <span className="flex items-center gap-1.5">
-            <Zap className="w-4 h-4 text-amber-700" />
-            Quick Demo Shortcuts
-          </span>
-          <span className="text-[10px] bg-[#FFD21F] text-[#171717] px-2 py-0.5 rounded font-extrabold">1-Click</span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={handleQuickCivilianLogin}
-            className="w-full py-2.5 px-3 rounded-xl bg-white hover:bg-slate-50 border border-amber-200 text-[#171717] font-extrabold text-xs shadow-2xs text-left flex items-center justify-between group transition-all"
-          >
-            <div>
-              <span className="block text-[11px] text-amber-900 font-extrabold">Civilian Demo</span>
-              <span className="text-[9px] text-slate-500 font-mono">demo@smartpark.in</span>
-            </div>
-            <Car className="w-4 h-4 text-amber-600 group-hover:scale-110 transition-transform" />
-          </button>
-
-          <button
-            type="button"
-            onClick={handleQuickOwnerLogin}
-            className="w-full py-2.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs shadow-2xs text-left flex items-center justify-between group transition-all"
-          >
-            <div>
-              <span className="block text-[11px] text-[#FFD21F] font-extrabold">Owner Portal Demo</span>
-              <span className="text-[9px] text-slate-300 font-mono">owner@smartpark.com</span>
-            </div>
-            <Building2 className="w-4 h-4 text-[#FFD21F] group-hover:scale-110 transition-transform" />
-          </button>
-        </div>
+        <p className="text-xs text-slate-500 font-medium">Smart parking & space owner portal.</p>
       </div>
 
       {/* Login Card */}
-      <div className="p-6 rounded-3xl bg-white border border-slate-200 shadow-md space-y-5">
+      <div className="p-6 sm:p-8 rounded-3xl bg-white border border-slate-200 shadow-md space-y-5">
         <div className="space-y-1">
           <h2 className="text-lg font-extrabold text-[#171717]">Log In</h2>
-          <p className="text-xs text-slate-500 font-medium">Access Civilian Dashboard or Owner Portal</p>
+          <p className="text-xs text-slate-500 font-medium">Access your Civilian Dashboard or Space Owner Portal</p>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-4 text-xs font-medium">
@@ -214,7 +168,7 @@ export default function Login() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="demo@smartpark.in or owner@smartpark.com"
+                placeholder="registered@email.com"
                 className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-[#171717] placeholder-slate-400 focus:outline-none focus:border-[#FFD21F] focus:ring-2 focus:ring-[#FFD21F]/40"
               />
             </div>
@@ -254,7 +208,7 @@ export default function Login() {
             className="w-full py-3.5 rounded-xl bg-[#FFD21F] hover:bg-[#E5B800] text-[#171717] font-extrabold text-sm flex items-center justify-center gap-2 shadow-xs transition-all disabled:opacity-50"
           >
             <LogIn className="w-4 h-4" />
-            {loading ? 'Logging in...' : 'Log In'}
+            {loading ? 'Authenticating...' : 'Log In'}
           </button>
         </form>
 
@@ -265,6 +219,69 @@ export default function Login() {
               Create Account
             </Link>
           </p>
+        </div>
+      </div>
+
+      {/* Hackathon Demo Access Card */}
+      <div className="p-5 rounded-3xl bg-amber-50/70 border border-amber-200/80 shadow-xs space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-[#171717]">
+            <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+            <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-800">Hackathon Demo Access</h3>
+          </div>
+          <span className="text-[10px] font-bold text-amber-800 bg-amber-200/60 px-2 py-0.5 rounded-full">
+            Real Backend DB Auth
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+          {/* Civilian Demo Option */}
+          <div className="p-3.5 rounded-2xl bg-white border border-amber-200/60 flex flex-col justify-between space-y-2.5">
+            <div>
+              <div className="font-extrabold text-[#171717] flex items-center justify-between">
+                <span>Civilian Demo</span>
+                <span className="text-[10px] text-slate-400 font-medium">Role: civilian</span>
+              </div>
+              <div className="text-[11px] text-slate-500 mt-1 font-mono">
+                email: <strong className="text-slate-800">demo@smartpark.in</strong>
+              </div>
+              <div className="text-[11px] text-slate-500 font-mono">
+                password: <span className="text-slate-800 font-semibold">demopassword</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleDemoClick('civilian')}
+              disabled={loading}
+              className="w-full py-2 px-3 rounded-xl bg-[#171717] hover:bg-slate-800 text-white text-[11px] font-extrabold transition-all shadow-xs flex items-center justify-center gap-1.5"
+            >
+              Use Civilian Demo
+            </button>
+          </div>
+
+          {/* Owner Demo Option */}
+          <div className="p-3.5 rounded-2xl bg-white border border-amber-200/60 flex flex-col justify-between space-y-2.5">
+            <div>
+              <div className="font-extrabold text-[#171717] flex items-center justify-between">
+                <span>Owner Demo</span>
+                <span className="text-[10px] text-slate-400 font-medium">Role: owner</span>
+              </div>
+              <div className="text-[11px] text-slate-500 mt-1 font-mono">
+                email: <strong className="text-slate-800">owner@smartpark.in</strong>
+              </div>
+              <div className="text-[11px] text-slate-500 font-mono">
+                password: <span className="text-slate-800 font-semibold">demopassword</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleDemoClick('owner')}
+              disabled={loading}
+              className="w-full py-2 px-3 rounded-xl bg-[#FFD21F] hover:bg-[#E5B800] text-[#171717] text-[11px] font-extrabold transition-all shadow-xs flex items-center justify-center gap-1.5"
+            >
+              Use Owner Demo
+            </button>
+          </div>
         </div>
       </div>
 

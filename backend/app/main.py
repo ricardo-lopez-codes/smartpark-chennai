@@ -43,7 +43,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include Routers
+# Include Routers (/api and /api/v1 aliases)
 app.include_router(auth_router, prefix=settings.API_V1_STR)
 app.include_router(areas_router, prefix=settings.API_V1_STR)
 app.include_router(parking_router, prefix=settings.API_V1_STR)
@@ -52,6 +52,14 @@ app.include_router(bookings_router, prefix=settings.API_V1_STR)
 app.include_router(payments_router, prefix=settings.API_V1_STR)
 app.include_router(demo_router, prefix=settings.API_V1_STR)
 app.include_router(owner_router, prefix=settings.API_V1_STR)
+
+# Fallback /api/v1 aliases for legacy frontend clients
+app.include_router(auth_router, prefix="/api/v1")
+app.include_router(areas_router, prefix="/api/v1")
+app.include_router(parking_router, prefix="/api/v1")
+app.include_router(slots_router, prefix="/api/v1")
+app.include_router(bookings_router, prefix="/api/v1")
+app.include_router(owner_router, prefix="/api/v1")
 
 @app.on_event("startup")
 def startup_event():

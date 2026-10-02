@@ -84,7 +84,7 @@ def get_owner_overview(
         Booking.booking_date == today_str
     ).all()
 
-    today_revenue = sum(b.amount for b in today_bookings if b.status in ["ACTIVE", "COMPLETED", "EXTENDED", "UPCOMING"])
+    today_revenue = sum(b.amount for b in today_bookings if b.status in ["ACTIVE", "CONFIRMED", "COMPLETED", "EXTENDED", "UPCOMING"])
     occupancy_pct = round(((occ + res) / total) * 100, 1)
 
     # Check if open right now

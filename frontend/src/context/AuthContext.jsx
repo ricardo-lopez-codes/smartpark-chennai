@@ -119,6 +119,28 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const demoLogin = async (role) => {
+    try {
+      let res;
+      try {
+        res = await api.post('/auth/demo-login', { role });
+      } catch (err1) {
+        const demoEmail = role === 'owner' ? 'owner@smartpark.in' : 'demo@smartpark.in';
+        res = await api.post('/auth/login', { email: demoEmail, password: 'demopassword' });
+      }
+      const { access_token, user: userData } = res.data;
+      localStorage.setItem('smartpark_token', access_token);
+      setToken(access_token);
+      setUser(userData);
+      return { success: true, user: userData };
+    } catch (err) {
+      return {
+        success: false,
+        error: err.response?.data?.detail || 'Demo login failed.'
+      };
+    }
+  };
+
   const logout = () => {
     localStorage.removeItem('smartpark_token');
     setToken(null);
@@ -141,6 +163,7 @@ export const AuthProvider = ({ children }) => {
       token,
       loading,
       login,
+      demoLogin,
       register: registerCivilian,
       registerCivilian,
       registerOwner,

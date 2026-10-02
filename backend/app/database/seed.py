@@ -1,3 +1,4 @@
+import json
 import random
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
@@ -13,330 +14,282 @@ def seed_db():
     db = SessionLocal()
 
     try:
-        # Check if already seeded
-        if db.query(User).first():
-            print("Database already seeded.")
-            return
+        print("Checking/Seeding database with PARK-A-LOT Demo Accounts & South Chennai parking data...")
 
-        print("Seeding database with South Chennai parking data...")
-
-        # 1. Create Users
-        demo_user = User(
-            name="Ricardo Lopez",
-            email="demo@smartpark.in",
-            phone="+91 98765 00000",
-            password_hash=get_password_hash("Demo@123"),
-            vehicle_number="TN-09-SP-2026",
-            role="civilian"
-        )
-        civilian = User(
-            name="Rajesh Kumar",
-            email="civilian@smartpark.com",
-            phone="+91 98765 43210",
-            password_hash=get_password_hash("password123"),
-            vehicle_number="TN-09-AB-1234",
-            role="civilian"
-        )
-        owner = User(
-            name="Chennai Commercial Properties",
-            email="owner@smartpark.com",
-            phone="+91 98765 99999",
-            password_hash=get_password_hash("password123"),
-            vehicle_number="TN-01-XX-9999",
-            role="owner"
-        )
-        gov = User(
-            name="Greater Chennai Corporation (GCC)",
-            email="gov@smartpark.com",
-            phone="+91 94440 12345",
-            password_hash=get_password_hash("password123"),
-            vehicle_number="TN-01-GCC-01",
-            role="government"
-        )
-        db.add_all([demo_user, civilian, owner, gov])
-        db.commit()
-        db.refresh(demo_user)
-        db.refresh(civilian)
-        db.refresh(owner)
-
-        # 2. South Chennai Areas & Parking Lots
-        areas_data = [
-            {
-                "name": "Anna Nagar",
-                "lots": [
-                    {
-                        "name": "Saravana Stores Parking",
-                        "address": "11th Main Rd, Block AA, Anna Nagar, Chennai",
-                        "latitude": 13.0850,
-                        "longitude": 80.2101,
-                        "total_slots": 126,
-                        "price_per_hour": 40.0,
-                        "parking_type": "Multi-level Covered",
-                        "opening_time": "09:00",
-                        "closing_time": "22:00"
-                    },
-                    {
-                        "name": "Anna Nagar Tower Park Lot",
-                        "address": "3rd Ave, Block Y, Anna Nagar, Chennai",
-                        "latitude": 13.0872,
-                        "longitude": 80.2125,
-                        "total_slots": 80,
-                        "price_per_hour": 30.0,
-                        "parking_type": "Open Smart Lot",
-                        "opening_time": "06:00",
-                        "closing_time": "23:00"
-                    }
-                ]
-            },
-            {
-                "name": "Koyambedu",
-                "lots": [
-                    {
-                        "name": "VR Chennai Mall Parking",
-                        "address": "Inner Ring Rd, Koyambedu, Chennai",
-                        "latitude": 13.0732,
-                        "longitude": 80.1912,
-                        "total_slots": 150,
-                        "price_per_hour": 50.0,
-                        "parking_type": "Underground Basement",
-                        "opening_time": "09:00",
-                        "closing_time": "23:00"
-                    },
-                    {
-                        "name": "Koyambedu Market Hub Lot",
-                        "address": "Market Road, Koyambedu, Chennai",
-                        "latitude": 13.0701,
-                        "longitude": 80.1945,
-                        "total_slots": 100,
-                        "price_per_hour": 35.0,
-                        "parking_type": "Surface Smart Bay",
-                        "opening_time": "05:00",
-                        "closing_time": "22:00"
-                    }
-                ]
-            },
-            {
-                "name": "Vadapalani",
-                "lots": [
-                    {
-                        "name": "Commercial Theatre Parking",
-                        "address": "100 Feet Rd, Vadapalani, Chennai",
-                        "latitude": 13.0500,
-                        "longitude": 80.2121,
-                        "total_slots": 150,
-                        "price_per_hour": 50.0,
-                        "parking_type": "Multi-Level Automated",
-                        "opening_time": "08:00",
-                        "closing_time": "23:30"
-                    },
-                    {
-                        "name": "Forum Vijaya Express Parking",
-                        "address": "Arcot Rd, Vadapalani, Chennai",
-                        "latitude": 13.0515,
-                        "longitude": 80.2105,
-                        "total_slots": 120,
-                        "price_per_hour": 45.0,
-                        "parking_type": "Covered Garage",
-                        "opening_time": "09:00",
-                        "closing_time": "22:30"
-                    }
-                ]
-            },
-            {
-                "name": "T. Nagar",
-                "lots": [
-                    {
-                        "name": "T. Nagar Commercial Hub Parking",
-                        "address": "Pondy Bazaar, T. Nagar, Chennai",
-                        "latitude": 13.0418,
-                        "longitude": 80.2341,
-                        "total_slots": 200,
-                        "price_per_hour": 50.0,
-                        "parking_type": "GCC Smart Multi-Level",
-                        "opening_time": "07:00",
-                        "closing_time": "23:00"
-                    },
-                    {
-                        "name": "Ranganathan Street Express Parking",
-                        "address": "Usman Rd, T. Nagar, Chennai",
-                        "latitude": 13.0395,
-                        "longitude": 80.2302,
-                        "total_slots": 90,
-                        "price_per_hour": 40.0,
-                        "parking_type": "Automated Mechanical Bay",
-                        "opening_time": "08:00",
-                        "closing_time": "22:00"
-                    }
-                ]
-            },
-            {
-                "name": "Guindy",
-                "lots": [
-                    {
-                        "name": "Guindy Metro Smart Parking",
-                        "address": "GST Road, Guindy, Chennai",
-                        "latitude": 13.0067,
-                        "longitude": 80.2020,
-                        "total_slots": 180,
-                        "price_per_hour": 30.0,
-                        "parking_type": "Transit Interchange Lot",
-                        "opening_time": "05:00",
-                        "closing_time": "23:30"
-                    }
-                ]
-            },
-            {
-                "name": "Adyar",
-                "lots": [
-                    {
-                        "name": "Adyar Depot Commercial Parking",
-                        "address": "Lattice Bridge Rd, Adyar, Chennai",
-                        "latitude": 13.0012,
-                        "longitude": 80.2565,
-                        "total_slots": 110,
-                        "price_per_hour": 35.0,
-                        "parking_type": "Surface Plaza",
-                        "opening_time": "06:00",
-                        "closing_time": "22:00"
-                    }
-                ]
-            },
-            {
-                "name": "Marina",
-                "lots": [
-                    {
-                        "name": "Marina Beach Promenade Parking",
-                        "address": "Kamarajar Salai, Marina Beach, Chennai",
-                        "latitude": 13.0499,
-                        "longitude": 80.2824,
-                        "total_slots": 250,
-                        "price_per_hour": 20.0,
-                        "parking_type": "Open Public Beach Parking",
-                        "opening_time": "05:00",
-                        "closing_time": "23:00"
-                    }
-                ]
-            },
-            {
-                "name": "Velachery",
-                "lots": [
-                    {
-                        "name": "Phoenix Marketcity Annex Parking",
-                        "address": "Velachery Main Rd, Velachery, Chennai",
-                        "latitude": 12.9815,
-                        "longitude": 80.2180,
-                        "total_slots": 220,
-                        "price_per_hour": 60.0,
-                        "parking_type": "Premium Smart Garage",
-                        "opening_time": "09:00",
-                        "closing_time": "23:00"
-                    }
-                ]
-            }
-        ]
-
-        # 3. Insert Areas, Lots, Slots and Sensors
-        for area_info in areas_data:
-            area = ParkingArea(name=area_info["name"])
-            db.add(area)
+        # 1. Civilian Demo Account
+        demo_user = db.query(User).filter(User.email == "demo@smartpark.in").first()
+        if not demo_user:
+            demo_user = User(
+                name="Demo Civilian User",
+                email="demo@smartpark.in",
+                phone="+91 98765 00000",
+                password_hash=get_password_hash("demopassword"),
+                vehicle_number="TN-09-SP-2026",
+                role="civilian"
+            )
+            db.add(demo_user)
             db.commit()
-            db.refresh(area)
+            db.refresh(demo_user)
+        else:
+            demo_user.password_hash = get_password_hash("demopassword")
+            demo_user.role = "civilian"
+            db.commit()
 
-            for lot_info in area_info["lots"]:
-                lot = ParkingLot(
-                    area_id=area.id,
-                    name=lot_info["name"],
-                    address=lot_info["address"],
-                    latitude=lot_info["latitude"],
-                    longitude=lot_info["longitude"],
-                    total_slots=lot_info["total_slots"],
-                    price_per_hour=lot_info["price_per_hour"],
-                    parking_type=lot_info["parking_type"],
-                    opening_time=lot_info.get("opening_time", "06:00"),
-                    closing_time=lot_info.get("closing_time", "23:00"),
-                    owner_id=owner.id
-                )
-                db.add(lot)
-                db.commit()
-                db.refresh(lot)
+        # 2. Owner Demo Account
+        owner_user = db.query(User).filter(User.email == "owner@smartpark.in").first()
+        if not owner_user:
+            owner_user = User(
+                name="Demo Space Owner",
+                email="owner@smartpark.in",
+                phone="+91 98765 43210",
+                password_hash=get_password_hash("demopassword"),
+                vehicle_number="N/A (Owner)",
+                role="owner"
+            )
+            db.add(owner_user)
+            db.commit()
+            db.refresh(owner_user)
+        else:
+            owner_user.password_hash = get_password_hash("demopassword")
+            owner_user.role = "owner"
+            db.commit()
 
-                # Create slots for each lot
-                num_slots_to_generate = min(lot.total_slots, 25)
-                statuses = ["available", "available", "available", "occupied", "occupied", "reserved", "unavailable"]
+        # 3. Fallback Civilian & Government Accounts
+        civilian = db.query(User).filter(User.email == "civilian@smartpark.com").first()
+        if not civilian:
+            civilian = User(
+                name="Rajesh Kumar",
+                email="civilian@smartpark.com",
+                phone="+91 98765 43211",
+                password_hash=get_password_hash("password123"),
+                vehicle_number="TN-09-AB-1234",
+                role="civilian"
+            )
+            db.add(civilian)
+            db.commit()
+            db.refresh(civilian)
 
-                for i in range(1, num_slots_to_generate + 1):
-                    prefix = chr(65 + (i - 1) // 10)  # A, B, C...
-                    num = (i - 1) % 10 + 1
-                    slot_number = f"{prefix}-{num:02d}"
-                    
-                    if slot_number in ["A-01", "A-02", "A-05", "A-27"]:
-                        slot_status = "available"
-                    else:
-                        slot_status = random.choice(statuses)
+        gov = db.query(User).filter(User.email == "gov@smartpark.com").first()
+        if not gov:
+            gov = User(
+                name="Greater Chennai Corporation (GCC)",
+                email="gov@smartpark.com",
+                phone="+91 94440 12345",
+                password_hash=get_password_hash("password123"),
+                vehicle_number="TN-01-GCC-01",
+                role="government"
+            )
+            db.add(gov)
+            db.commit()
 
-                    device_id = f"ESP32-MAG-{lot.id:02d}-{slot_number}"
-                    
+        # 4. Resolve Guindy Area for Demo Owner Lot
+        guindy_area = db.query(ParkingArea).filter(ParkingArea.name.ilike("%Guindy%")).first()
+        if not guindy_area:
+            guindy_area = ParkingArea(name="Guindy")
+            db.add(guindy_area)
+            db.commit()
+            db.refresh(guindy_area)
+
+        # 5. Demo Owner Parking Lot
+        demo_lot = db.query(ParkingLot).filter(ParkingLot.owner_id == owner_user.id).first()
+        if not demo_lot:
+            demo_lot = ParkingLot(
+                area_id=guindy_area.id,
+                name="PARK-A-LOT Demo Parking",
+                address="100 Mount Road, Guindy, South Chennai",
+                latitude=13.0067,
+                longitude=80.2020,
+                total_slots=20,
+                price_per_hour=40.0,
+                parking_type="Multi-Level Commercial Smart Lot",
+                opening_time="06:00",
+                closing_time="23:00",
+                slot_prefix="A",
+                slot_start_num=1,
+                slot_end_num=20,
+                owner_id=owner_user.id,
+                contact_person="Demo Manager",
+                phone="+91 98765 43210",
+                email="owner@smartpark.in"
+            )
+            db.add(demo_lot)
+            db.commit()
+            db.refresh(demo_lot)
+        else:
+            # Ensure name and details are set correctly
+            demo_lot.name = "PARK-A-LOT Demo Parking"
+            demo_lot.contact_person = "Demo Manager"
+            demo_lot.phone = "+91 98765 43210"
+            demo_lot.email = "owner@smartpark.in"
+            db.commit()
+
+        # 6. Ensure 20 slots for Demo Owner Lot (A1 to A20)
+        existing_slots = db.query(ParkingSlot).filter(ParkingSlot.parking_lot_id == demo_lot.id).all()
+        if len(existing_slots) < 20:
+            existing_numbers = {s.slot_number for s in existing_slots}
+            for i in range(1, 21):
+                slot_num = f"A{i}"
+                if slot_num not in existing_numbers:
+                    status = "occupied" if i in [2, 5, 8, 12] else ("reserved" if i in [4, 15] else "available")
                     slot = ParkingSlot(
-                        parking_lot_id=lot.id,
-                        slot_number=slot_number,
-                        status=slot_status,
-                        sensor_id=device_id
+                        parking_lot_id=demo_lot.id,
+                        slot_number=slot_num,
+                        status=status,
+                        zone="Zone A",
+                        price_per_hour=40.0,
+                        sensor_id=f"ESP32-MAG-DEMO-{slot_num}"
                     )
                     db.add(slot)
                     db.commit()
                     db.refresh(slot)
 
-                    # Create sensor for slot
                     sensor = Sensor(
                         slot_id=slot.id,
-                        device_id=device_id,
-                        magnetic_value=48.5 if slot_status == "occupied" else 15.2,
-                        vehicle_detected=(slot_status == "occupied")
+                        device_id=slot.sensor_id,
+                        magnetic_value=48.5 if status == "occupied" else 15.2,
+                        vehicle_detected=(status == "occupied")
                     )
                     db.add(sensor)
-                
+            db.commit()
+            existing_slots = db.query(ParkingSlot).filter(ParkingSlot.parking_lot_id == demo_lot.id).all()
+
+        # 7. Seed realistic Demo Owner Bookings (ONLY for demo_lot)
+        existing_bookings = db.query(Booking).filter(Booking.parking_lot_id == demo_lot.id).count()
+        if existing_bookings == 0:
+            now = datetime.now(timezone.utc)
+            slot_map = {s.slot_number: s for s in existing_slots}
+
+            sample_bookings = [
+                {
+                    "booking_id": "SP-DEMO-20261001-01",
+                    "user_id": demo_user.id,
+                    "slot": slot_map.get("A2"),
+                    "date": (now - timedelta(hours=1)).strftime("%Y-%m-%d"),
+                    "start": now - timedelta(hours=1),
+                    "paid_end": now + timedelta(hours=2),
+                    "status": "CONFIRMED",
+                    "amount": 120.0
+                },
+                {
+                    "booking_id": "SP-DEMO-20261001-02",
+                    "user_id": civilian.id,
+                    "slot": slot_map.get("A5"),
+                    "date": (now - timedelta(hours=2)).strftime("%Y-%m-%d"),
+                    "start": now - timedelta(hours=2),
+                    "paid_end": now + timedelta(hours=1),
+                    "status": "CONFIRMED",
+                    "amount": 120.0
+                },
+                {
+                    "booking_id": "SP-DEMO-20261001-03",
+                    "user_id": civilian.id,
+                    "slot": slot_map.get("A8"),
+                    "date": (now - timedelta(hours=3)).strftime("%Y-%m-%d"),
+                    "start": now - timedelta(hours=3),
+                    "paid_end": now + timedelta(hours=3),
+                    "status": "CONFIRMED",
+                    "amount": 240.0
+                },
+                {
+                    "booking_id": "SP-DEMO-20260930-04",
+                    "user_id": demo_user.id,
+                    "slot": slot_map.get("A1"),
+                    "date": (now - timedelta(days=1)).strftime("%Y-%m-%d"),
+                    "start": now - timedelta(days=1, hours=4),
+                    "paid_end": now - timedelta(days=1, hours=1),
+                    "status": "COMPLETED",
+                    "amount": 120.0
+                },
+                {
+                    "booking_id": "SP-DEMO-20260930-05",
+                    "user_id": civilian.id,
+                    "slot": slot_map.get("A3"),
+                    "date": (now - timedelta(days=1)).strftime("%Y-%m-%d"),
+                    "start": now - timedelta(days=1, hours=6),
+                    "paid_end": now - timedelta(days=1, hours=2),
+                    "status": "COMPLETED",
+                    "amount": 160.0
+                },
+                {
+                    "booking_id": "SP-DEMO-20261002-06",
+                    "user_id": demo_user.id,
+                    "slot": slot_map.get("A4"),
+                    "date": (now + timedelta(days=1)).strftime("%Y-%m-%d"),
+                    "start": now + timedelta(days=1, hours=2),
+                    "paid_end": now + timedelta(days=1, hours=5),
+                    "status": "CONFIRMED",
+                    "amount": 120.0
+                }
+            ]
+
+            for b in sample_bookings:
+                if b["slot"]:
+                    booking_rec = Booking(
+                        booking_id=b["booking_id"],
+                        user_id=b["user_id"],
+                        parking_lot_id=demo_lot.id,
+                        slot_id=b["slot"].id,
+                        booking_date=b["date"],
+                        duration_hours=3,
+                        start_time=b["start"],
+                        paid_end_time=b["paid_end"],
+                        buffer_end_time=b["paid_end"] + timedelta(minutes=15),
+                        actual_end_time=b["paid_end"] if b["status"] == "COMPLETED" else None,
+                        status=b["status"],
+                        amount=b["amount"],
+                        payment_id=f"pay_{b['booking_id'].lower()}"
+                    )
+                    db.add(booking_rec)
+            db.commit()
+
+        # 8. Seed other areas if missing
+        areas_data = [
+            {"name": "Anna Nagar", "lots": [{"name": "Saravana Stores Parking", "address": "11th Main Rd, Block AA, Anna Nagar, Chennai", "latitude": 13.0850, "longitude": 80.2101, "total_slots": 126, "price_per_hour": 40.0, "parking_type": "Multi-level Covered"}]},
+            {"name": "Koyambedu", "lots": [{"name": "VR Chennai Mall Parking", "address": "Inner Ring Rd, Koyambedu, Chennai", "latitude": 13.0732, "longitude": 80.1912, "total_slots": 150, "price_per_hour": 50.0, "parking_type": "Underground Basement"}]},
+            {"name": "Vadapalani", "lots": [{"name": "Commercial Theatre Parking", "address": "100 Feet Rd, Vadapalani, Chennai", "latitude": 13.0500, "longitude": 80.2121, "total_slots": 150, "price_per_hour": 50.0, "parking_type": "Multi-Level Automated"}]},
+            {"name": "T. Nagar", "lots": [{"name": "T. Nagar Commercial Hub Parking", "address": "Pondy Bazaar, T. Nagar, Chennai", "latitude": 13.0418, "longitude": 80.2341, "total_slots": 200, "price_per_hour": 50.0, "parking_type": "GCC Smart Multi-Level"}]},
+            {"name": "Adyar", "lots": [{"name": "Adyar Depot Commercial Parking", "address": "Lattice Bridge Rd, Adyar, Chennai", "latitude": 13.0012, "longitude": 80.2565, "total_slots": 110, "price_per_hour": 35.0, "parking_type": "Surface Plaza"}]},
+            {"name": "Velachery", "lots": [{"name": "Phoenix Marketcity Annex Parking", "address": "Velachery Main Rd, Velachery, Chennai", "latitude": 12.9815, "longitude": 80.2180, "total_slots": 220, "price_per_hour": 60.0, "parking_type": "Premium Smart Garage"}]}
+        ]
+
+        for area_info in areas_data:
+            area = db.query(ParkingArea).filter(ParkingArea.name == area_info["name"]).first()
+            if not area:
+                area = ParkingArea(name=area_info["name"])
+                db.add(area)
                 db.commit()
+                db.refresh(area)
 
-        # 4. Seed Demo Past Bookings
-        first_lot = db.query(ParkingLot).first()
-        first_slot = db.query(ParkingSlot).filter(ParkingSlot.parking_lot_id == first_lot.id).first()
+            for lot_info in area_info["lots"]:
+                lot = db.query(ParkingLot).filter(ParkingLot.name == lot_info["name"]).first()
+                if not lot:
+                    lot = ParkingLot(
+                        area_id=area.id,
+                        name=lot_info["name"],
+                        address=lot_info["address"],
+                        latitude=lot_info["latitude"],
+                        longitude=lot_info["longitude"],
+                        total_slots=lot_info["total_slots"],
+                        price_per_hour=lot_info["price_per_hour"],
+                        parking_type=lot_info["parking_type"],
+                        opening_time="06:00",
+                        closing_time="23:00",
+                        owner_id=owner_user.id
+                    )
+                    db.add(lot)
+                    db.commit()
+                    db.refresh(lot)
 
-        now = datetime.now(timezone.utc)
-        
-        past_booking_demo = Booking(
-            booking_id="SP-20261001-089",
-            user_id=demo_user.id,
-            parking_lot_id=first_lot.id,
-            slot_id=first_slot.id,
-            booking_date=(now - timedelta(days=2)).strftime("%Y-%m-%d"),
-            duration_hours=2,
-            start_time=now - timedelta(days=2, hours=4),
-            paid_end_time=now - timedelta(days=2, hours=2),
-            buffer_end_time=now - timedelta(days=2, hours=1),
-            actual_end_time=now - timedelta(days=2, hours=2),
-            status="COMPLETED",
-            amount=90.0,
-            payment_id="pay_mock_past_01"
-        )
-        db.add(past_booking_demo)
-
-        cancelled_booking = Booking(
-            booking_id="SP-20260928-042",
-            user_id=civilian.id,
-            parking_lot_id=first_lot.id,
-            slot_id=first_slot.id,
-            booking_date=(now - timedelta(days=5)).strftime("%Y-%m-%d"),
-            duration_hours=2,
-            start_time=now - timedelta(days=5, hours=3),
-            paid_end_time=now - timedelta(days=5, hours=1),
-            buffer_end_time=now - timedelta(days=5),
-            actual_end_time=now - timedelta(days=5, hours=3),
-            status="CANCELLED",
-            amount=90.0,
-            payment_id="pay_mock_past_02"
-        )
-        db.add(cancelled_booking)
-        db.commit()
+                    for i in range(1, min(lot.total_slots, 10) + 1):
+                        slot_num = f"B{i}"
+                        slot = ParkingSlot(
+                            parking_lot_id=lot.id,
+                            slot_number=slot_num,
+                            status="available",
+                            sensor_id=f"ESP32-MAG-{lot.id:02d}-{slot_num}"
+                        )
+                        db.add(slot)
+                    db.commit()
 
         print("Database seed completed successfully!")
 

@@ -175,6 +175,30 @@ def login(credentials: UserLogin, db: Session = Depends(get_db)):
         "user": user
     }
 
+@router.post("/demo-login", response_model=Token)
+def demo_login(payload: dict, db: Session = Depends(get_db)):
+    role = str(payload.get("role", "civilian")).lower()
+    target_email = "owner@smartpark.in" if role == "owner" else "demo@smartpark.in"
+    
+    user = db.query(User).filter(User.email == target_email).first()
+    if not user:
+        from app.database.seed import seed_db
+        seed_db()
+        user = db.query(User).filter(User.email == target_email).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Demo account for {role} not found."
+        )
+
+    access_token = create_access_token(data={"sub": user.email, "role": user.role})
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": user
+    }
+
 @router.post("/forgot-password")
 def forgot_password(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == req.email).first()
