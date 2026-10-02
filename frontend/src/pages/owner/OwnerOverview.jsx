@@ -6,13 +6,11 @@ import {
   Layers,
   CalendarCheck,
   IndianRupee,
-  Cpu,
   ArrowUpRight,
-  ShieldCheck,
-  AlertTriangle,
   Clock,
   Car,
-  ChevronRight
+  ChevronRight,
+  CheckCircle2
 } from 'lucide-react';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
@@ -33,44 +31,12 @@ export default function OwnerOverview() {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const res = await api.get('/owner/dashboard');
+      const res = await api.get('/owner/overview');
       setData(res.data);
       setError(null);
     } catch (err) {
       console.error('Failed to fetch owner dashboard metrics:', err);
-      // Fallback demo metrics if API responds with delay
-      setData({
-        owner_name: user?.name || 'Chennai Commercial Properties',
-        lot_name: 'Saravana Stores Parking',
-        status: 'Online',
-        metrics: {
-          total_slots: 80,
-          available: 32,
-          occupied: 41,
-          reserved: 7,
-          maintenance: 0,
-          today_revenue: 8450,
-          today_bookings: 67,
-          occupancy_pct: 68
-        },
-        sensor_health: {
-          gateway_status: 'Online',
-          last_sync: '2 seconds ago',
-          connected: 76,
-          total: 80,
-          healthy: 74,
-          warnings: 2,
-          offline: 4
-        },
-        occupancy_trend: [
-          { time: '06:00', occupancy: 15 },
-          { time: '09:00', occupancy: 45 },
-          { time: '12:00', occupancy: 72 },
-          { time: '15:00', occupancy: 68 },
-          { time: '18:00', occupancy: 89 },
-          { time: '21:00', occupancy: 54 }
-        ]
-      });
+      setError('Unable to connect to parking server. Please verify backend service.');
     } finally {
       setLoading(false);
     }
@@ -78,28 +44,44 @@ export default function OwnerOverview() {
 
   useEffect(() => {
     fetchDashboardData();
-    const interval = setInterval(fetchDashboardData, 15000);
+    const interval = setInterval(fetchDashboardData, 10000);
     return () => clearInterval(interval);
   }, []);
 
   if (loading && !data) {
     return (
-      <div className="py-20 text-center">
-        <div className="w-10 h-10 border-4 border-[#FFD21F] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-        <p className="text-xs font-extrabold text-slate-500">Loading live parking metrics...</p>
+      <div className="py-20 text-center space-y-3">
+        <div className="w-10 h-10 border-4 border-[#FFD21F] border-t-transparent rounded-full animate-spin mx-auto" />
+        <p className="text-xs font-extrabold text-slate-500">Loading live parking database metrics...</p>
       </div>
     );
   }
 
-  const metrics = data?.metrics || {
-    total_slots: 80,
-    available: 32,
-    occupied: 41,
-    reserved: 7,
-    today_revenue: 8450,
-    today_bookings: 67,
-    occupancy_pct: 68
-  };
+  if (error && !data) {
+    return (
+      <div className="p-8 rounded-3xl bg-rose-50 border border-rose-200 text-center space-y-4 max-w-lg mx-auto my-10">
+        <h3 className="font-extrabold text-rose-950 text-base">Database Connection Failure</h3>
+        <p className="text-xs text-rose-800 font-medium">{error}</p>
+        <button
+          onClick={fetchDashboardData}
+          className="px-5 py-2.5 rounded-xl bg-rose-900 text-white font-extrabold text-xs hover:bg-rose-950 transition-all"
+        >
+          Retry Connection
+        </button>
+      </div>
+    );
+  }
+
+  // Real Database Metrics (or default zero values if new empty lot)
+  const totalSlots = data?.total_slots || 0;
+  const availableSlots = data?.available_slots ?? totalSlots;
+  const occupiedSlots = data?.occupied_slots || 0;
+  const reservedSlots = data?.reserved_slots || 0;
+  const todayRevenue = data?.today_revenue || 0;
+  const todayBookingsCount = data?.today_bookings_count || 0;
+  const occupancyPct = data?.occupancy_percent || 0;
+  const lotName = data?.company_name || 'My Parking Facility';
+  const isOpen = data?.is_open ?? true;
 
   return (
     <div className="space-y-6">
@@ -111,18 +93,24 @@ export default function OwnerOverview() {
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2">
             <div className="flex items-center gap-3">
-              <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-extrabold flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                Lot Online
+              <span className={`px-3 py-1 rounded-full text-xs font-extrabold flex items-center gap-1.5 border ${
+                isOpen
+                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                  : 'bg-rose-500/20 text-rose-400 border-rose-500/30'
+              }`}>
+                <span className={`w-2 h-2 rounded-full ${isOpen ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`} />
+                {isOpen ? 'Lot Open Now' : 'Closed Outside Hours'}
               </span>
-              <span className="text-xs text-slate-400 font-mono">ID: PKL-SARAVANA-01</span>
+              <span className="text-xs text-slate-400 font-mono">
+                Hours: {data?.opening_time || '06:00'} – {data?.closing_time || '23:00'}
+              </span>
             </div>
             
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-              {getGreeting()}, <span className="text-[#FFD21F]">{data?.owner_name || user?.name}</span>
+              {getGreeting()}, <span className="text-[#FFD21F]">{user?.name}</span>
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 font-medium max-w-xl">
-              PARK-A-LOT • <strong className="text-white">{data?.lot_name || 'Saravana Stores Parking'}</strong>
+              PARK-A-LOT • <strong className="text-white">{lotName}</strong>
             </p>
           </div>
 
@@ -133,7 +121,7 @@ export default function OwnerOverview() {
               className="px-4 py-3 rounded-2xl bg-[#FFD21F] hover:bg-[#E5B800] text-[#171717] font-extrabold text-xs flex items-center gap-2 shadow-md transition-all active:scale-95"
             >
               <Grid className="w-4 h-4" />
-              View Live Grid
+              View Live Slot Grid
             </Link>
             <Link
               to="/owner/bookings"
@@ -146,7 +134,7 @@ export default function OwnerOverview() {
         </div>
       </div>
 
-      {/* 7 Summary Cards */}
+      {/* 7 Real Database Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 sm:gap-4">
         
         {/* Total Slots */}
@@ -155,8 +143,8 @@ export default function OwnerOverview() {
             <span>Total Slots</span>
             <Layers className="w-4 h-4 text-slate-400" />
           </div>
-          <p className="text-2xl font-black text-[#171717]">{metrics.total_slots}</p>
-          <span className="text-[10px] text-slate-400 font-medium block">Multi-level Covered</span>
+          <p className="text-2xl font-black text-[#171717]">{totalSlots}</p>
+          <span className="text-[10px] text-slate-400 font-medium block">Registered in DB</span>
         </div>
 
         {/* Available */}
@@ -165,8 +153,8 @@ export default function OwnerOverview() {
             <span>Available</span>
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
           </div>
-          <p className="text-2xl font-black text-emerald-950">{metrics.available}</p>
-          <span className="text-[10px] text-emerald-700 font-bold block">Ready to book</span>
+          <p className="text-2xl font-black text-emerald-950">{availableSlots}</p>
+          <span className="text-[10px] text-emerald-700 font-bold block">Ready for civilians</span>
         </div>
 
         {/* Occupied */}
@@ -175,7 +163,7 @@ export default function OwnerOverview() {
             <span>Occupied</span>
             <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
           </div>
-          <p className="text-2xl font-black text-rose-950">{metrics.occupied}</p>
+          <p className="text-2xl font-black text-rose-950">{occupiedSlots}</p>
           <span className="text-[10px] text-rose-700 font-bold block">Active parked</span>
         </div>
 
@@ -185,7 +173,7 @@ export default function OwnerOverview() {
             <span>Reserved</span>
             <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
           </div>
-          <p className="text-2xl font-black text-amber-950">{metrics.reserved}</p>
+          <p className="text-2xl font-black text-amber-950">{reservedSlots}</p>
           <span className="text-[10px] text-amber-800 font-bold block">Upcoming arrivals</span>
         </div>
 
@@ -195,9 +183,9 @@ export default function OwnerOverview() {
             <span>Today's Revenue</span>
             <IndianRupee className="w-4 h-4 text-emerald-600" />
           </div>
-          <p className="text-2xl font-black text-[#171717]">₹{metrics.today_revenue.toLocaleString()}</p>
+          <p className="text-2xl font-black text-[#171717]">₹{todayRevenue.toLocaleString()}</p>
           <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-0.5">
-            <TrendingUp className="w-3 h-3" /> +14% vs yesterday
+            <TrendingUp className="w-3 h-3" /> Live DB calculation
           </span>
         </div>
 
@@ -207,7 +195,7 @@ export default function OwnerOverview() {
             <span>Bookings</span>
             <CalendarCheck className="w-4 h-4 text-blue-600" />
           </div>
-          <p className="text-2xl font-black text-[#171717]">{metrics.today_bookings}</p>
+          <p className="text-2xl font-black text-[#171717]">{todayBookingsCount}</p>
           <span className="text-[10px] text-slate-500 font-medium block">Total reservations</span>
         </div>
 
@@ -215,145 +203,97 @@ export default function OwnerOverview() {
         <div className="p-4 rounded-2xl bg-[#FFD21F]/20 border border-[#FFD21F] shadow-xs space-y-1">
           <div className="flex items-center justify-between text-[#171717] text-xs font-extrabold">
             <span>Occupancy</span>
-            <span className="text-xs font-black">{metrics.occupancy_pct}%</span>
+            <span className="text-xs font-black">{occupancyPct}%</span>
           </div>
           <div className="w-full h-2.5 bg-white rounded-full overflow-hidden">
             <div
               className="h-full bg-[#171717] rounded-full transition-all duration-500"
-              style={{ width: `${metrics.occupancy_pct}%` }}
+              style={{ width: `${occupancyPct}%` }}
             />
           </div>
-          <span className="text-[10px] text-[#171717] font-bold block pt-0.5">Optimal capacity</span>
+          <span className="text-[10px] text-[#171717] font-bold block pt-0.5">Real-time DB load</span>
         </div>
 
       </div>
 
-      {/* Main Grid: Occupancy Trend + Quick Widgets */}
+      {/* Main Section: Quick Status & Facilities */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Left 2 Cols: Occupancy Trend Graph */}
-        <div className="lg:col-span-2 p-6 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-5">
+        {/* Facility Info Card */}
+        <div className="lg:col-span-2 p-6 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="font-extrabold text-base text-[#171717]">Occupancy & Turnover Trend</h3>
-              <p className="text-xs text-slate-500">Hourly percentage load across Saravana Stores Parking</p>
+              <h3 className="font-extrabold text-base text-[#171717]">Parking Facility Status</h3>
+              <p className="text-xs text-slate-500">Live operational data from central FastAPI database</p>
             </div>
-            <Link to="/owner/analytics" className="text-xs font-extrabold text-slate-900 hover:underline flex items-center gap-1">
-              Full Analytics <ChevronRight className="w-4 h-4" />
+            <Link to="/owner/settings" className="text-xs font-extrabold text-slate-900 hover:underline flex items-center gap-1">
+              Edit Facility Info <ChevronRight className="w-4 h-4" />
             </Link>
           </div>
 
-          {/* Visual SVG Bar Chart */}
-          <div className="pt-4 pb-2">
-            <div className="h-52 w-full flex items-end justify-between gap-3 sm:gap-6 px-2">
-              {(data?.occupancy_trend || [
-                { time: '06:00', occupancy: 15 },
-                { time: '09:00', occupancy: 45 },
-                { time: '12:00', occupancy: 72 },
-                { time: '15:00', occupancy: 68 },
-                { time: '18:00', occupancy: 89 },
-                { time: '21:00', occupancy: 54 }
-              ]).map((pt, i) => (
-                <div key={i} className="flex-1 flex flex-col items-center gap-2 h-full justify-end group">
-                  <span className="text-[11px] font-extrabold text-slate-700 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {pt.occupancy}%
-                  </span>
-                  <div
-                    className="w-full rounded-t-xl bg-[#171717] group-hover:bg-[#FFD21F] transition-all duration-300 relative"
-                    style={{ height: `${pt.occupancy}%` }}
-                  >
-                    {pt.occupancy > 80 && (
-                      <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-rose-500 animate-ping" />
-                    )}
-                  </div>
-                  <span className="text-[11px] font-bold text-slate-500">{pt.time}</span>
-                </div>
-              ))}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-medium pt-2">
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-2">
+              <span className="text-[10px] text-slate-400 font-bold uppercase block">Facility Name</span>
+              <p className="font-bold text-[#171717] text-sm">{lotName}</p>
+              <span className="text-[11px] text-slate-500 block">{data?.address || 'South Chennai Commercial Hub'}</span>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-2">
+              <span className="text-[10px] text-slate-400 font-bold uppercase block">Operating Hours & Pricing</span>
+              <p className="font-bold text-[#171717] text-sm">₹{data?.price_per_hour || 40}/hour</p>
+              <span className="text-[11px] text-slate-500 block font-mono">
+                Open: {data?.opening_time || '06:00'} | Close: {data?.closing_time || '23:00'}
+              </span>
             </div>
           </div>
 
-          <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between text-xs text-slate-600 font-medium">
+          <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-between text-xs text-emerald-900 font-bold">
             <span className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-amber-600" />
-              Peak load expected today between <strong>6:00 PM and 8:00 PM (89% capacity)</strong>
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              Shared Database Synchronization Active (FastAPI Server)
             </span>
-            <span className="font-bold text-slate-900">{metrics.total_slots} Total Slots</span>
+            <span className="font-extrabold">{totalSlots} Total Slots</span>
           </div>
         </div>
 
-        {/* Right 1 Col: Quick Lot Operations */}
-        <div className="space-y-6">
-          
-          {/* Quick Lot Overview Card */}
-          <div className="p-6 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2.5 rounded-xl bg-amber-50 text-amber-800 font-bold">
-                  <Car className="w-5 h-5 text-[#171717]" />
-                </div>
-                <div>
-                  <h4 className="font-extrabold text-sm text-[#171717]">Parking Facility</h4>
-                  <p className="text-xs text-slate-500">{data?.lot_name || 'Saravana Stores Parking'}</p>
-                </div>
+        {/* Quick Lot Operations Widget */}
+        <div className="p-6 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2.5 rounded-xl bg-amber-50 text-amber-800 font-bold">
+                <Car className="w-5 h-5 text-[#171717]" />
               </div>
-              <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-extrabold">
-                ● Open Now
+              <div>
+                <h4 className="font-extrabold text-sm text-[#171717]">Quick Lot Action</h4>
+                <p className="text-xs text-slate-500">Inspect real-time slot grid</p>
+              </div>
+            </div>
+            <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-extrabold">
+              ● Live DB
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 pt-2">
+            <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
+              <span className="text-[10px] text-slate-500 font-bold block uppercase">Available</span>
+              <span className="text-lg font-black text-[#171717]">
+                {availableSlots} / {totalSlots}
               </span>
             </div>
-
-            <div className="grid grid-cols-2 gap-3 pt-2">
-              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
-                <span className="text-[10px] text-slate-500 font-bold block uppercase">Available</span>
-                <span className="text-lg font-black text-[#171717]">
-                  {metrics.available} / {metrics.total_slots}
-                </span>
-              </div>
-              <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-100">
-                <span className="text-[10px] text-emerald-800 font-bold block uppercase">Occupancy</span>
-                <span className="text-lg font-black text-emerald-950">
-                  {metrics.occupancy_pct}%
-                </span>
-              </div>
+            <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-100">
+              <span className="text-[10px] text-emerald-800 font-bold block uppercase">Occupancy</span>
+              <span className="text-lg font-black text-emerald-950">
+                {occupancyPct}%
+              </span>
             </div>
-
-            <Link
-              to="/owner/live-parking"
-              className="w-full py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-[#171717] font-extrabold text-xs flex items-center justify-center gap-2 transition-all"
-            >
-              Inspect Parking Slots <ArrowUpRight className="w-4 h-4" />
-            </Link>
           </div>
 
-          {/* Quick Operational Alerts */}
-          <div className="p-6 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-4">
-            <h4 className="font-extrabold text-sm text-[#171717]">Recent Operations</h4>
-            
-            <div className="space-y-3 text-xs">
-              <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 flex items-start gap-3">
-                <AlertTriangle className="w-4 h-4 text-amber-700 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-bold text-amber-950">Slot A-04 Sensor Offline</p>
-                  <p className="text-[11px] text-amber-800">Disconnected 10 minutes ago</p>
-                </div>
-              </div>
-
-              <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-start gap-3">
-                <ShieldCheck className="w-4 h-4 text-emerald-700 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-bold text-emerald-950">Booking Reserved (A-27)</p>
-                  <p className="text-[11px] text-emerald-800">TN-09-AB-1234 • ₹90 paid</p>
-                </div>
-              </div>
-            </div>
-
-            <Link
-              to="/owner/notifications"
-              className="block text-center text-xs font-extrabold text-slate-600 hover:text-slate-900 hover:underline"
-            >
-              View all operational logs →
-            </Link>
-          </div>
-
+          <Link
+            to="/owner/live-parking"
+            className="w-full py-3 rounded-xl bg-[#171717] hover:bg-black text-[#FFD21F] font-extrabold text-xs flex items-center justify-center gap-2 transition-all shadow-xs"
+          >
+            Inspect Live Slot Grid <ArrowUpRight className="w-4 h-4" />
+          </Link>
         </div>
 
       </div>

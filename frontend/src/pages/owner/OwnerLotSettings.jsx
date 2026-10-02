@@ -30,16 +30,15 @@ export default function OwnerLotSettings() {
   const fetchSettings = async () => {
     try {
       setLoading(true);
-      const res = await api.get('/owner/parking-lots/1');
+      const res = await api.get('/owner/settings');
       if (res.data) {
-        setName(res.data.name || 'Saravana Stores Parking');
-        setAddress(res.data.address || '11th Main Rd, Block AA, Anna Nagar, Chennai');
-        setPhone(res.data.phone || '+91 44 2434 1122');
-        setEmail(res.data.email || 'owner@smartpark.com');
+        setName(res.data.company_name || 'My Parking Space');
+        setAddress(res.data.address || 'South Chennai Hub');
+        setPhone(res.data.phone || '+91 98765 43210');
+        setEmail(res.data.email || '');
         setPrice(res.data.price_per_hour || 40);
-        setOpeningTime(res.data.opening_time || '09:00');
-        setClosingTime(res.data.closing_time || '22:00');
-        setDescription(res.data.description || 'Premium multi-level covered smart parking facility with 24/7 CCTV & EV Charging.');
+        setOpeningTime(res.data.opening_time || '06:00');
+        setClosingTime(res.data.closing_time || '23:00');
       }
     } catch (err) {
       console.error('Failed to fetch lot settings:', err);
@@ -56,34 +55,24 @@ export default function OwnerLotSettings() {
     e.preventDefault();
     setSaving(true);
     try {
-      const facilityStr = Object.entries(facilities)
-        .filter(([_, val]) => val)
-        .map(([key]) => key)
-        .join(', ');
-
-      await api.put('/owner/parking-lots/1', {
-        name,
-        address,
-        phone,
-        email,
-        price_per_hour: parseFloat(price),
-        opening_time: openingTime,
-        closing_time: closingTime,
-        description,
-        facilities: facilityStr,
-        max_duration_hours: parseInt(maxDuration),
-        cancellation_policy: cancellationPolicy
+      await api.put('/owner/settings', null, {
+        params: {
+          company_name: name,
+          phone,
+          opening_time: openingTime,
+          closing_time: closingTime,
+          price_per_hour: price
+        }
       });
-
       addNotification({
         title: 'Settings Saved',
-        message: 'Parking lot parameters updated successfully.',
+        message: 'Parking facility settings updated in central database.',
         type: 'success'
       });
     } catch (err) {
       addNotification({
         title: 'Save Failed',
-        message: err.response?.data?.detail || 'Error saving settings.',
+        message: 'Could not update settings in database.',
         type: 'error'
       });
     } finally {

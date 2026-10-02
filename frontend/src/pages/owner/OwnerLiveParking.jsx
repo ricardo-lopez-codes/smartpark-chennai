@@ -25,7 +25,7 @@ export default function OwnerLiveParking() {
 
   const fetchSlots = async () => {
     try {
-      const res = await api.get('/owner/parking-lots/1/slots');
+      const res = await api.get('/owner/live-slots');
       setSlots(res.data);
     } catch (err) {
       console.error('Failed to fetch owner slots:', err);
@@ -247,29 +247,29 @@ export default function OwnerLiveParking() {
                 </div>
 
                 {/* Active Booking Info if Present */}
-                {selectedSlot.active_booking ? (
+                {(selectedSlot.booking || selectedSlot.active_booking) ? (
                   <div className="p-4 rounded-2xl bg-amber-50/80 border border-amber-200 space-y-2.5">
                     <div className="flex items-center justify-between">
                       <span className="text-[11px] font-extrabold text-amber-950 uppercase tracking-wider">
                         Active Reservation
                       </span>
                       <span className="text-[10px] font-mono font-bold bg-amber-200 text-amber-900 px-2 py-0.5 rounded">
-                        {selectedSlot.active_booking.booking_id}
+                        {(selectedSlot.booking || selectedSlot.active_booking).booking_id}
                       </span>
                     </div>
 
                     <div className="space-y-1.5 text-xs text-slate-800">
                       <div className="flex items-center gap-2 font-bold">
                         <User className="w-3.5 h-3.5 text-amber-800" />
-                        <span>{selectedSlot.active_booking.customer_name}</span>
+                        <span>{(selectedSlot.booking || selectedSlot.active_booking).customer_name}</span>
                       </div>
                       <div className="flex items-center gap-2 font-mono text-slate-700">
                         <Car className="w-3.5 h-3.5 text-amber-800" />
-                        <span>{selectedSlot.active_booking.vehicle_number}</span>
+                        <span>{(selectedSlot.booking || selectedSlot.active_booking).vehicle_number}</span>
                       </div>
                       <div className="flex items-center gap-2 text-slate-600 text-[11px]">
                         <Clock className="w-3.5 h-3.5 text-amber-800" />
-                        <span>Ends at {new Date(selectedSlot.active_booking.paid_end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        <span>Status: <strong>{(selectedSlot.booking || selectedSlot.active_booking).status}</strong></span>
                       </div>
                     </div>
                   </div>
@@ -278,22 +278,6 @@ export default function OwnerLiveParking() {
                     No active civilian reservation on this bay.
                   </div>
                 )}
-
-                {/* Sensor Info */}
-                <div className="p-4 rounded-2xl bg-slate-900 text-white space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="flex items-center gap-1.5 font-bold text-slate-300">
-                      <Cpu className="w-4 h-4 text-[#FFD21F]" />
-                      Sensor Telemetry
-                    </span>
-                    <span className="text-[10px] font-bold text-emerald-400">● Online</span>
-                  </div>
-                  <div className="text-[11px] space-y-1 text-slate-300 font-mono">
-                    <p>Device: {selectedSlot.sensor_id || 'ESP32-MAG-01'}</p>
-                    <p>Vehicle Detected: <strong className="text-white">{selectedSlot.sensor?.vehicle_detected ? 'YES' : 'NO'}</strong></p>
-                    <p>Magnetic Reading: {selectedSlot.sensor?.magnetic_value || 15.2} μT</p>
-                  </div>
-                </div>
               </div>
 
               {/* Actions */}
