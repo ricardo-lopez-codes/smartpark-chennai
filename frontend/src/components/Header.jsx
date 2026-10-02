@@ -1,12 +1,10 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Menu, Car, Cpu } from 'lucide-react';
+import { Menu, Car } from 'lucide-react';
 import SideMenu from './SideMenu';
-import { useBooking } from '../context/BookingContext';
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const { demoMode } = useBooking();
 
   return (
     <>
@@ -21,14 +19,8 @@ export default function Header() {
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-extrabold text-xl tracking-tight text-[#171717]">
-                  SMARTPARK
+                  PARK-A-LOT
                 </span>
-                {demoMode && (
-                  <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-900 border border-amber-300 rounded-full">
-                    <Cpu className="w-3 h-3 text-amber-700 animate-pulse" />
-                    Demo IoT Mode
-                  </span>
-                )}
               </div>
               <p className="text-xs text-slate-500 font-medium hidden xs:block">
                 Smart Parking Availability System
@@ -36,13 +28,8 @@ export default function Header() {
             </div>
           </Link>
 
-          {/* Right: Status & Hamburger Menu */}
+          {/* Right: Hamburger Menu */}
           <div className="flex items-center gap-3">
-            <div className="hidden md:flex items-center gap-2 bg-slate-100 border border-slate-200 rounded-full px-3 py-1.5 text-xs text-slate-700">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-              <span className="font-bold text-emerald-700">Live IoT Gateway Sync</span>
-            </div>
-
             <button
               onClick={() => setIsMenuOpen(true)}
               className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-[#171717] border border-slate-200 transition-all active:scale-95 flex items-center justify-center"

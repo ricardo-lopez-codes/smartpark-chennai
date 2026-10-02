@@ -21,7 +21,7 @@ export default function Login() {
     if (res.success) {
       addNotification({
         title: 'Welcome Back',
-        message: 'Successfully logged into SmartPark',
+        message: 'Successfully logged into PARK-A-LOT',
         type: 'success'
       });
       navigate('/');
@@ -59,7 +59,7 @@ export default function Login() {
         <div className="w-16 h-16 rounded-3xl bg-[#FFD21F] flex items-center justify-center text-[#171717] mx-auto shadow-md">
           <Car className="w-8 h-8 text-[#171717]" />
         </div>
-        <h1 className="text-3xl font-extrabold text-[#171717] tracking-tight">SMARTPARK</h1>
+        <h1 className="text-3xl font-extrabold text-[#171717] tracking-tight">PARK-A-LOT</h1>
         <p className="text-xs text-slate-500 font-medium">Smart parking made simple.</p>
       </div>
 
@@ -68,7 +68,7 @@ export default function Login() {
         <div className="flex items-center justify-between text-xs text-amber-950 font-bold">
           <span className="flex items-center gap-1.5">
             <Zap className="w-4 h-4 text-amber-700" />
-            Hackathon Demo Account
+            Quick Demo Account
           </span>
           <span className="text-[10px] bg-[#FFD21F] text-[#171717] px-2 py-0.5 rounded font-extrabold">1-Click</span>
         </div>

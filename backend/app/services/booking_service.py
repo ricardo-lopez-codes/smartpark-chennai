@@ -28,13 +28,24 @@ def format_booking_response(booking: Booking, now: datetime = None) -> dict:
     if buffer_end_t.tzinfo is None:
         buffer_end_t = buffer_end_t.replace(tzinfo=timezone.utc)
 
-    # Calculate remaining seconds based on status
-    if now < start_t:
-        rem_seconds = int((paid_end_t - start_t).total_seconds())
-    else:
-        rem_seconds = int((paid_end_t - now).total_seconds())
-        if rem_seconds < 0:
+    # Dynamic status calculation based on current timestamp
+    if booking.status in ["UPCOMING", "ACTIVE", "EXTENDED"]:
+        if now < start_t:
+            computed_status = "UPCOMING"
             rem_seconds = 0
+            seconds_until_start = int((start_t - now).total_seconds())
+        elif now >= start_t and now < paid_end_t:
+            computed_status = "EXTENDED" if booking.status == "EXTENDED" else "ACTIVE"
+            rem_seconds = int((paid_end_t - now).total_seconds())
+            seconds_until_start = 0
+        else:
+            computed_status = "EXPIRED"
+            rem_seconds = 0
+            seconds_until_start = 0
+    else:
+        computed_status = booking.status
+        rem_seconds = 0
+        seconds_until_start = 0
 
     return {
         "id": booking.id,
@@ -53,7 +64,8 @@ def format_booking_response(booking: Booking, now: datetime = None) -> dict:
         "buffer_end_time": buffer_end_t,
         "actual_end_time": booking.actual_end_time,
         "remaining_seconds": rem_seconds,
-        "status": booking.status,
+        "seconds_until_start": seconds_until_start,
+        "status": computed_status,
         "amount": booking.amount,
         "payment_id": booking.payment_id,
         "created_at": booking.created_at,

@@ -137,7 +137,7 @@ export default function Settings() {
             className="w-full py-3.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-extrabold text-xs flex items-center justify-center gap-2 transition-all shadow-xs"
           >
             <LogOut className="w-4 h-4" />
-            Logout from SmartPark
+            Logout from PARK-A-LOT
           </button>
         </div>
       </div>

@@ -34,9 +34,12 @@ export default function Home() {
     a.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const firstName = user?.name ? user.name.split(' ')[0] : 'Civilian';
+  const firstName = user?.name ? user.name.split(' ')[0] : 'Driver';
 
-  const isUpcoming = activeBooking && activeBooking.status === 'UPCOMING';
+  const isUpcoming = activeBooking && (
+    activeBooking.status === 'UPCOMING' || 
+    (activeBooking.start_time && new Date(activeBooking.start_time).getTime() > Date.now())
+  );
 
   return (
     <div className="space-y-8 pb-12">

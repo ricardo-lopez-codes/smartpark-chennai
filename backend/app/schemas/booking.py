@@ -55,6 +55,7 @@ class BookingResponse(BaseModel):
     buffer_end_time: datetime
     actual_end_time: Optional[datetime] = None
     remaining_seconds: int
+    seconds_until_start: Optional[int] = 0
     status: str
     amount: float
     payment_id: Optional[str] = None

@@ -36,7 +36,7 @@ export default function Register() {
     if (res.success) {
       addNotification({
         title: 'Account Created',
-        message: 'Welcome to SmartPark!',
+        message: 'Welcome to PARK-A-LOT!',
         type: 'success'
       });
       navigate('/');
@@ -57,7 +57,7 @@ export default function Register() {
         <div className="w-16 h-16 rounded-3xl bg-[#FFD21F] flex items-center justify-center text-[#171717] mx-auto shadow-md">
           <Car className="w-8 h-8 text-[#171717]" />
         </div>
-        <h1 className="text-3xl font-extrabold text-[#171717] tracking-tight">Welcome to SmartPark</h1>
+        <h1 className="text-3xl font-extrabold text-[#171717] tracking-tight">Welcome to PARK-A-LOT</h1>
         <p className="text-xs text-slate-500 font-medium">Find, reserve and manage your parking with ease.</p>
       </div>
 
@@ -65,7 +65,7 @@ export default function Register() {
       <div className="p-6 rounded-3xl bg-white border border-slate-200 shadow-md space-y-5">
         <div className="space-y-1">
           <h2 className="text-lg font-extrabold text-[#171717]">Create your account</h2>
-          <p className="text-xs text-slate-500 font-medium">Register for civilian parking access across South Chennai</p>
+          <p className="text-xs text-slate-500 font-medium">Register for parking access across South Chennai</p>
         </div>
 
         <form onSubmit={handleRegister} className="space-y-3.5 text-xs font-medium">

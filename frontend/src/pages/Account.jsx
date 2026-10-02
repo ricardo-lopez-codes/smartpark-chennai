@@ -49,7 +49,7 @@ export default function Account() {
         </button>
         <div>
           <h1 className="text-2xl font-extrabold text-[#171717]">My Account</h1>
-          <p className="text-xs text-slate-500 font-medium">Civilian user details & vehicle settings</p>
+          <p className="text-xs text-slate-500 font-medium">User details & vehicle settings</p>
         </div>
       </div>
 
@@ -60,9 +60,9 @@ export default function Account() {
             {user?.name ? user.name.charAt(0).toUpperCase() : 'U'}
           </div>
           <div>
-            <h2 className="text-xl font-extrabold text-[#171717]">{user?.name || 'Civilian User'}</h2>
+            <h2 className="text-xl font-extrabold text-[#171717]">{user?.name || 'User Account'}</h2>
             <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-extrabold uppercase tracking-wider">
-              {user?.role || 'civilian'} Account
+              {user?.role || 'User'} Account
             </span>
           </div>
         </div>

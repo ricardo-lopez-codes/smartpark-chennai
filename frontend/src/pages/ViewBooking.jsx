@@ -153,7 +153,9 @@ export default function ViewBooking() {
       {/* Countdown Timer Widget */}
       {isBookingActive && (
         <CountdownTimer
-          targetIsoTime={booking.paid_end_time}
+          startTime={booking.start_time}
+          paidEndTime={booking.paid_end_time}
+          status={booking.status}
           onExpiringWarning={handleExpiringWarning}
           onExpired={handleExpired}
         />

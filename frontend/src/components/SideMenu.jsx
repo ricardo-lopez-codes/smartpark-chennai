@@ -40,7 +40,7 @@ export default function SideMenu({ isOpen, onClose }) {
                 {user?.name ? user.name.charAt(0).toUpperCase() : 'U'}
               </div>
               <div>
-                <h3 className="font-extrabold text-[#171717] text-base">{user?.name || 'Civilian User'}</h3>
+                <h3 className="font-extrabold text-[#171717] text-base">{user?.name || 'User Account'}</h3>
                 <p className="text-xs text-slate-500 font-mono mt-0.5">{user?.vehicle_number || 'TN-09-AB-1234'}</p>
               </div>
             </div>
@@ -52,11 +52,11 @@ export default function SideMenu({ isOpen, onClose }) {
             </button>
           </div>
 
-          {/* Civilian Dashboard Badge */}
+          {/* Portal Badge */}
           <div className="my-6 p-3.5 rounded-2xl bg-amber-50 border border-amber-200 flex items-center gap-3">
             <Shield className="w-5 h-5 text-amber-700 flex-shrink-0" />
             <div>
-              <p className="text-xs font-extrabold text-amber-950">Civilian Portal</p>
+              <p className="text-xs font-extrabold text-amber-950">Smart Parking Portal</p>
               <p className="text-[11px] text-amber-800">South Chennai Smart City Hubs</p>
             </div>
           </div>

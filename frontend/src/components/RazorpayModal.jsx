@@ -41,7 +41,7 @@ export default function RazorpayModal({ isOpen, onClose, lot, slot, duration, to
             </div>
           </div>
           <div className="mt-4">
-            <p className="text-xs text-slate-400 font-medium">Paying to SmartPark South Chennai</p>
+            <p className="text-xs text-slate-400 font-medium">Paying to PARK-A-LOT South Chennai</p>
             <p className="text-3xl font-extrabold text-[#FFD21F] mt-1">{formatCurrency(totalAmount)}</p>
           </div>
         </div>
