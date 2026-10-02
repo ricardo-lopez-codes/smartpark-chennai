@@ -5,20 +5,33 @@ class WebSocketService {
     this.reconnectTimer = null;
   }
 
-  connect() {
+  getWebSocketUrl() {
+    if (import.meta.env.VITE_WS_URL) {
+      return import.meta.env.VITE_WS_URL;
+    }
+
+    const apiUrl = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '').trim();
+    if (apiUrl && apiUrl.startsWith('http')) {
+      const wsProtocol = apiUrl.startsWith('https') ? 'wss:' : 'ws:';
+      const cleanHost = apiUrl.replace(/^https?:\/\//, '').replace(/\/api\/?$/, '').replace(/\/+$/, '');
+      return `${wsProtocol}//${cleanHost}/ws/parking`;
+    }
+
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
-    const wsUrl = import.meta.env.VITE_WS_URL || (
-      import.meta.env.DEV
-        ? `ws://${window.location.hostname}:8000/ws/parking`
-        : `${protocol}//${host}/ws/parking`
-    );
+    return import.meta.env.DEV
+      ? `ws://${window.location.hostname}:8000/ws/parking`
+      : `${protocol}//${host}/ws/parking`;
+  }
+
+  connect() {
+    const wsUrl = this.getWebSocketUrl();
 
     try {
       this.ws = new WebSocket(wsUrl);
 
       this.ws.onopen = () => {
-        console.log('[WebSocket] Real-time IoT sensor stream connected.');
+        console.log('[WebSocket] Real-time IoT sensor stream connected to:', wsUrl);
       };
 
       this.ws.onmessage = (event) => {
