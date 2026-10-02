@@ -10,6 +10,19 @@ from app.services.booking_service import check_slot_availability_for_range
 
 router = APIRouter(prefix="/parking-lots", tags=["Parking"])
 
+def parse_facilities(fac_str: Optional[str]) -> List[str]:
+    if not fac_str:
+        return []
+    if fac_str.startswith("["):
+        try:
+            import json
+            parsed = json.loads(fac_str)
+            if isinstance(parsed, list):
+                return [str(x) for x in parsed]
+        except Exception:
+            pass
+    return [f.strip() for f in fac_str.split(",") if f.strip()]
+
 @router.get("", response_model=List[LotResponse])
 def get_parking_lots(
     area_id: Optional[int] = Query(None),
@@ -56,7 +69,13 @@ def get_parking_lots(
             "parking_type": lot.parking_type,
             "opening_time": lot.opening_time or "06:00",
             "closing_time": lot.closing_time or "23:00",
-            "distance_km": round(1.2 + (lot.id * 0.3) % 2.5, 1)
+            "distance_km": round(1.2 + (lot.id * 0.3) % 2.5, 1),
+            "contact_person": lot.contact_person,
+            "phone": lot.phone,
+            "email": lot.email,
+            "facilities": parse_facilities(lot.facilities),
+            "description": lot.description,
+            "cancellation_policy": lot.cancellation_policy
         })
 
     return results
@@ -87,7 +106,13 @@ def get_parking_lot(id: int, db: Session = Depends(get_db)):
         "parking_type": lot.parking_type,
         "opening_time": lot.opening_time or "06:00",
         "closing_time": lot.closing_time or "23:00",
-        "distance_km": round(1.2 + (lot.id * 0.3) % 2.5, 1)
+        "distance_km": round(1.2 + (lot.id * 0.3) % 2.5, 1),
+        "contact_person": lot.contact_person,
+        "phone": lot.phone,
+        "email": lot.email,
+        "facilities": parse_facilities(lot.facilities),
+        "description": lot.description,
+        "cancellation_policy": lot.cancellation_policy
     }
 
 @router.get("/{id}/slots", response_model=List[SlotResponse])

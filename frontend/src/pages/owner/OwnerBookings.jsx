@@ -93,7 +93,7 @@ export default function OwnerBookings() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h2 className="text-xl font-black text-[#171717]">Bookings Management</h2>
-            <p className="text-xs text-slate-500">Monitor civilian reservations for Saravana Stores Parking</p>
+            <p className="text-xs text-slate-500">Monitor live civilian reservations for your parking facility</p>
           </div>
 
           {/* Search bar */}

@@ -8,6 +8,7 @@ from app.models.parking import ParkingLot, ParkingSlot, ParkingArea
 from app.models.booking import Booking, Payment
 from app.services.auth import get_current_user
 from app.services.sensor_service import update_slot_sensor_status
+from app.schemas.owner import OwnerLotSettingsResponse, OwnerLotSettingsUpdate
 
 router = APIRouter(prefix="/owner", tags=["Owner Portal"])
 
@@ -200,40 +201,92 @@ def get_owner_bookings(
 
 @router.get("/calendar")
 def get_owner_calendar(
-    view_type: Optional[str] = Query("month"),
+    date: Optional[str] = Query(None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     lot = get_owner_lot(db, current_user)
     now = datetime.now(timezone.utc)
-    
-    # Generate calendar day summaries for the next 14 days
-    days = []
-    for i in range(14):
-        target_date = (now + timedelta(days=i)).strftime("%Y-%m-%d")
-        b_count = db.query(Booking).filter(
-            Booking.parking_lot_id == lot.id,
-            Booking.booking_date == target_date,
-            Booking.status.in_(["UPCOMING", "ACTIVE", "COMPLETED", "EXTENDED"])
-        ).count()
+    target_date = date or now.strftime("%Y-%m-%d")
 
-        rev = sum(b.amount for b in db.query(Booking).filter(
-            Booking.parking_lot_id == lot.id,
-            Booking.booking_date == target_date
-        ).all())
+    slots = db.query(ParkingSlot).filter(ParkingSlot.parking_lot_id == lot.id).all()
+    total_slots = len(slots) or lot.total_slots or 0
 
-        days.append({
-            "date": target_date,
-            "day_name": (now + timedelta(days=i)).strftime("%a"),
-            "bookings_count": b_count,
-            "projected_revenue": round(rev, 2),
-            "expected_occupancy": min(100, int((b_count / max(1, lot.total_slots)) * 100))
+    # Fetch real DB bookings for this owner's lot on target_date
+    bookings = db.query(Booking).filter(
+        Booking.parking_lot_id == lot.id,
+        Booking.booking_date == target_date,
+        Booking.status.in_(["UPCOMING", "ACTIVE", "COMPLETED", "EXTENDED", "PAID", "CONFIRMED"])
+    ).all()
+
+    total_bookings = len(bookings)
+    expected_revenue = round(sum(b.amount for b in bookings), 2)
+    booked_slot_ids = set(b.slot_id for b in bookings)
+    available_bays = max(0, total_slots - len(booked_slot_ids))
+    expected_occupancy_pct = round((len(booked_slot_ids) / max(1, total_slots)) * 100, 1)
+
+    # 6 Standard 3-hour windows for hourly density
+    time_windows = [
+        ("06:00", "09:00", 6, 9),
+        ("09:00", "12:00", 9, 12),
+        ("12:00", "15:00", 12, 15),
+        ("15:00", "18:00", 15, 18),
+        ("18:00", "21:00", 18, 21),
+        ("21:00", "00:00", 21, 24)
+    ]
+
+    hourly_density = []
+    max_b_count = 0
+    peak_hours_str = "No bookings"
+
+    for label_start, label_end, start_h, end_h in time_windows:
+        w_bookings = []
+        w_slots = set()
+        for b in bookings:
+            # Parse start and end hours for booking
+            b_start_h = b.start_time.hour if b.start_time else 10
+            b_end_h = b.paid_end_time.hour if b.paid_end_time else b_start_h + (b.duration_hours or 2)
+            if b_start_h < end_h and b_end_h > start_h:
+                w_bookings.append(b)
+                w_slots.add(b.slot_id)
+
+        w_b_count = len(w_bookings)
+        w_rev = round(sum(b.amount for b in w_bookings), 2)
+        w_occ = round((len(w_slots) / max(1, total_slots)) * 100, 1)
+
+        if w_b_count > max_b_count:
+            max_b_count = w_b_count
+            peak_hours_str = f"{label_start} – {label_end}"
+
+        hourly_density.append({
+            "start": label_start,
+            "end": label_end,
+            "hour": f"{label_start} - {label_end}",
+            "bookings": w_b_count,
+            "occupancy": w_occ,
+            "revenue": w_rev
         })
 
     return {
-        "view": view_type,
-        "total_lots": 1,
-        "days": days
+        "parking_lot": {
+            "id": lot.id,
+            "name": lot.name,
+            "address": lot.address,
+            "total_slots": total_slots
+        },
+        "date": target_date,
+        "total_bookings": total_bookings,
+        "expected_occupancy": expected_occupancy_pct,
+        "available_bays": available_bays,
+        "expected_revenue": expected_revenue,
+        "metrics": {
+            "total_bookings": total_bookings,
+            "expected_occupancy_pct": expected_occupancy_pct,
+            "available_slots": available_bays,
+            "expected_revenue": expected_revenue,
+            "peak_hours": peak_hours_str
+        },
+        "hourly_density": hourly_density
     }
 
 @router.get("/revenue")
@@ -363,49 +416,171 @@ def get_owner_notifications(
         }
     ]
 
-@router.get("/settings")
-def get_owner_settings(
+def parse_facilities(fac_str: Optional[str]) -> List[str]:
+    if not fac_str:
+        return []
+    if fac_str.startswith("["):
+        try:
+            import json
+            parsed = json.loads(fac_str)
+            if isinstance(parsed, list):
+                return [str(x) for x in parsed]
+        except Exception:
+            pass
+    return [f.strip() for f in fac_str.split(",") if f.strip()]
+
+def format_lot_settings_response(lot: ParkingLot, user: User) -> dict:
+    slots = lot.slots or []
+    tot = len(slots) if slots else (lot.total_slots or 20)
+    prefix = lot.slot_prefix or "A"
+    start_num = lot.slot_start_num or 1
+    end_num = lot.slot_end_num or (start_num + tot - 1)
+
+    return {
+        "owner_id": user.id,
+        "parking_lot_id": lot.id,
+        "company_name": lot.name,
+        "contact_person": lot.contact_person or user.name,
+        "phone": lot.phone or user.phone or "+91 98765 43210",
+        "email": lot.email or user.email,
+        "address": lot.address,
+        "total_slots": tot,
+        "slot_prefix": prefix,
+        "slot_start": start_num,
+        "slot_end": end_num,
+        "opening_time": lot.opening_time or "06:00",
+        "closing_time": lot.closing_time or "23:00",
+        "price_per_hour": lot.price_per_hour or 40.0,
+        "facilities": parse_facilities(lot.facilities),
+        "description": lot.description or "Multi-level covered smart parking facility with 24/7 CCTV & EV Charging.",
+        "cancellation_policy": lot.cancellation_policy or "Full refund minus 1 hour parking fee if cancelled before start time."
+    }
+
+@router.get("/lot-settings", response_model=OwnerLotSettingsResponse)
+@router.get("/settings", response_model=OwnerLotSettingsResponse)
+def get_owner_lot_settings(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     lot = get_owner_lot(db, current_user)
-    return {
-        "company_name": lot.name,
-        "person_name": current_user.name,
-        "phone": current_user.phone or lot.phone,
-        "email": current_user.email,
-        "address": lot.address,
-        "opening_time": lot.opening_time,
-        "closing_time": lot.closing_time,
-        "price_per_hour": lot.price_per_hour,
-        "total_slots": lot.total_slots,
-        "slot_range": f"{lot.slot_prefix or 'A'}{lot.slot_start_num or 1}-{lot.slot_prefix or 'A'}{lot.slot_end_num or lot.total_slots}",
-        "parking_rules": "Covered parking. Valid ticket required. Max 8 hours per session."
-    }
+    return format_lot_settings_response(lot, current_user)
 
-@router.put("/settings")
-def update_owner_settings(
+@router.put("/lot-settings", response_model=OwnerLotSettingsResponse)
+@router.put("/settings", response_model=OwnerLotSettingsResponse)
+def update_owner_lot_settings(
+    payload: Optional[OwnerLotSettingsUpdate] = None,
     company_name: Optional[str] = Query(None),
+    contact_person: Optional[str] = Query(None),
     phone: Optional[str] = Query(None),
+    email: Optional[str] = Query(None),
+    address: Optional[str] = Query(None),
+    total_slots: Optional[int] = Query(None),
+    slot_prefix: Optional[str] = Query(None),
+    slot_start: Optional[int] = Query(None),
+    slot_end: Optional[int] = Query(None),
     opening_time: Optional[str] = Query(None),
     closing_time: Optional[str] = Query(None),
     price_per_hour: Optional[float] = Query(None),
+    description: Optional[str] = Query(None),
+    cancellation_policy: Optional[str] = Query(None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     lot = get_owner_lot(db, current_user)
-    if company_name:
-        lot.name = company_name
-    if phone:
-        lot.phone = phone
-        current_user.phone = phone
-    if opening_time:
-        lot.opening_time = opening_time
-    if closing_time:
-        lot.closing_time = closing_time
-    if price_per_hour is not None:
-        lot.price_per_hour = price_per_hour
+
+    # Extract values prioritizing payload body then query parameters
+    comp_name = payload.company_name if (payload and payload.company_name is not None) else company_name
+    cont_person = payload.contact_person if (payload and payload.contact_person is not None) else contact_person
+    ph = payload.phone if (payload and payload.phone is not None) else phone
+    em = payload.email if (payload and payload.email is not None) else email
+    addr = payload.address if (payload and payload.address is not None) else address
+    op_time = payload.opening_time if (payload and payload.opening_time is not None) else opening_time
+    cl_time = payload.closing_time if (payload and payload.closing_time is not None) else closing_time
+    price = payload.price_per_hour if (payload and payload.price_per_hour is not None) else price_per_hour
+    facs = payload.facilities if (payload and payload.facilities is not None) else None
+    desc = payload.description if (payload and payload.description is not None) else description
+    canc_pol = payload.cancellation_policy if (payload and payload.cancellation_policy is not None) else cancellation_policy
+    tot_slots = payload.total_slots if (payload and payload.total_slots is not None) else total_slots
+    s_prefix = payload.slot_prefix if (payload and payload.slot_prefix is not None) else slot_prefix
+    s_start = payload.slot_start if (payload and payload.slot_start is not None) else slot_start
+    s_end = payload.slot_end if (payload and payload.slot_end is not None) else slot_end
+
+    if comp_name:
+        lot.name = comp_name
+    if cont_person:
+        lot.contact_person = cont_person
+    if ph:
+        lot.phone = ph
+        current_user.phone = ph
+    if em:
+        lot.email = em
+    if addr:
+        lot.address = addr
+    if op_time:
+        lot.opening_time = op_time
+    if cl_time:
+        lot.closing_time = cl_time
+    if price is not None:
+        lot.price_per_hour = price
+    if desc:
+        lot.description = desc
+    if canc_pol:
+        lot.cancellation_policy = canc_pol
+    if facs is not None:
+        if isinstance(facs, list):
+            lot.facilities = ", ".join(facs)
+        else:
+            lot.facilities = str(facs)
+
+    # Re-configure slots safely
+    if any(x is not None for x in [tot_slots, s_prefix, s_start, s_end]):
+        prefix = (s_prefix or lot.slot_prefix or "A").upper().strip()
+        start_num = s_start if s_start is not None else (lot.slot_start_num or 1)
+        
+        if s_end is not None:
+            end_num = s_end
+            count = max(1, end_num - start_num + 1)
+        elif tot_slots is not None:
+            count = max(1, tot_slots)
+            end_num = start_num + count - 1
+        else:
+            end_num = lot.slot_end_num or (start_num + (lot.total_slots or 20) - 1)
+            count = max(1, end_num - start_num + 1)
+
+        new_slot_numbers = [f"{prefix}{i}" for i in range(start_num, end_num + 1)]
+        existing_slots = db.query(ParkingSlot).filter(ParkingSlot.parking_lot_id == lot.id).all()
+        existing_map = {s.slot_number: s for s in existing_slots}
+
+        for num_str in new_slot_numbers:
+            if num_str not in existing_map:
+                new_slot = ParkingSlot(
+                    parking_lot_id=lot.id,
+                    slot_number=num_str,
+                    status="available",
+                    zone=f"Zone {prefix}",
+                    price_per_hour=lot.price_per_hour,
+                    sensor_id=f"ESP32-MAG-{lot.id:02d}-{num_str}"
+                )
+                db.add(new_slot)
+            else:
+                ex_slot = existing_map[num_str]
+                if ex_slot.status == "unavailable":
+                    ex_slot.status = "available"
+
+        new_num_set = set(new_slot_numbers)
+        for ex_slot in existing_slots:
+            if ex_slot.slot_number not in new_num_set:
+                has_bookings = db.query(Booking).filter(Booking.slot_id == ex_slot.id).first() is not None
+                if has_bookings:
+                    ex_slot.status = "unavailable"
+                else:
+                    db.delete(ex_slot)
+
+        lot.slot_prefix = prefix
+        lot.slot_start_num = start_num
+        lot.slot_end_num = end_num
+        lot.total_slots = len(new_slot_numbers)
 
     db.commit()
     db.refresh(lot)
-    return {"message": "Settings updated successfully", "lot_id": lot.id}
+    return format_lot_settings_response(lot, current_user)

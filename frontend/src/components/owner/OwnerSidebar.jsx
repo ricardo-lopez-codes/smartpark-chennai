@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
-export default function OwnerSidebar({ mobileOpen, setMobileOpen, unreadNotifsCount = 2, selectedLotName = "Saravana Stores Parking" }) {
+export default function OwnerSidebar({ mobileOpen, setMobileOpen, unreadNotifsCount = 2, selectedLotName = "Parking Lot" }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 

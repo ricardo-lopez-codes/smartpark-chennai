@@ -109,7 +109,7 @@ export default function OwnerLiveParking() {
       <div className="p-6 rounded-3xl bg-white border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-black text-[#171717]">Live Parking Slot Grid</h2>
-          <p className="text-xs text-slate-500">Real-time magnetometer sensor & occupancy map for Saravana Stores Parking</p>
+          <p className="text-xs text-slate-500">Real-time magnetometer sensor & occupancy map for your facility</p>
         </div>
 
         {/* Legend */}

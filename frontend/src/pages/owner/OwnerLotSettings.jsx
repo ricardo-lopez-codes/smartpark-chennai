@@ -1,47 +1,79 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Save, MapPin, Phone, Mail, Clock, Shield, CheckSquare } from 'lucide-react';
+import { Settings, Save, MapPin, Phone, Mail, Clock, Shield, CheckSquare, Layers, Sparkles, UserCheck } from 'lucide-react';
 import api from '../../services/api';
 import { useNotification } from '../../context/NotificationContext';
+
+const STANDARD_FACILITIES = [
+  'CCTV',
+  'EV Charging',
+  'Security',
+  'Covered Parking',
+  'Accessible Parking',
+  'Car Wash',
+  'Restrooms',
+  'Valet Parking',
+  '24/7 Security'
+];
 
 export default function OwnerLotSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const { addNotification } = useNotification();
 
-  const [name, setName] = useState('Saravana Stores Parking');
-  const [address, setAddress] = useState('11th Main Rd, Block AA, Anna Nagar, Chennai');
-  const [phone, setPhone] = useState('+91 44 2434 1122');
-  const [email, setEmail] = useState('contact@saravanastores.in');
+  // Basic Details
+  const [companyName, setCompanyName] = useState('');
+  const [address, setAddress] = useState('');
+  const [contactPerson, setContactPerson] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+
+  // Slot Configuration
+  const [totalSlots, setTotalSlots] = useState(20);
+  const [slotPrefix, setSlotPrefix] = useState('A');
+  const [slotStart, setSlotStart] = useState(1);
+  const [slotEnd, setSlotEnd] = useState(20);
+
+  // Operating Hours & Rules
+  const [openingTime, setOpeningTime] = useState('06:00');
+  const [closingTime, setClosingTime] = useState('23:00');
   const [price, setPrice] = useState(40);
-  const [openingTime, setOpeningTime] = useState('09:00');
-  const [closingTime, setClosingTime] = useState('22:00');
-  const [description, setDescription] = useState('Premium multi-level covered smart parking facility with 24/7 CCTV & EV Charging.');
-  const [maxDuration, setMaxDuration] = useState(8);
-  const [cancellationPolicy, setCancellationPolicy] = useState('Full refund minus 1 hour parking fee if cancelled before start time.');
-  
-  const [facilities, setFacilities] = useState({
-    cctv: true,
-    evCharging: true,
-    security: true,
-    covered: true,
-    accessible: true
-  });
+  const [description, setDescription] = useState('');
+  const [cancellationPolicy, setCancellationPolicy] = useState('');
+
+  // Facilities
+  const [selectedFacilities, setSelectedFacilities] = useState([]);
 
   const fetchSettings = async () => {
     try {
       setLoading(true);
-      const res = await api.get('/owner/settings');
+      const res = await api.get('/owner/lot-settings');
       if (res.data) {
-        setName(res.data.company_name || 'My Parking Space');
-        setAddress(res.data.address || 'South Chennai Hub');
-        setPhone(res.data.phone || '+91 98765 43210');
+        setCompanyName(res.data.company_name || '');
+        setAddress(res.data.address || '');
+        setContactPerson(res.data.contact_person || '');
+        setPhone(res.data.phone || '');
         setEmail(res.data.email || '');
-        setPrice(res.data.price_per_hour || 40);
+
+        setTotalSlots(res.data.total_slots || 20);
+        setSlotPrefix(res.data.slot_prefix || 'A');
+        setSlotStart(res.data.slot_start || 1);
+        setSlotEnd(res.data.slot_end || 20);
+
         setOpeningTime(res.data.opening_time || '06:00');
         setClosingTime(res.data.closing_time || '23:00');
+        setPrice(res.data.price_per_hour || 40);
+        setDescription(res.data.description || '');
+        setCancellationPolicy(res.data.cancellation_policy || '');
+
+        setSelectedFacilities(res.data.facilities || []);
       }
     } catch (err) {
       console.error('Failed to fetch lot settings:', err);
+      addNotification({
+        title: 'Error',
+        message: 'Failed to load lot settings from backend database.',
+        type: 'error'
+      });
     } finally {
       setLoading(false);
     }
@@ -51,28 +83,85 @@ export default function OwnerLotSettings() {
     fetchSettings();
   }, []);
 
+  // Compute live slot preview
+  const computeSlotPreview = () => {
+    const prefix = (slotPrefix || 'A').toUpperCase().trim();
+    const start = Number(slotStart) || 1;
+    const end = Number(slotEnd) || (start + Number(totalSlots) - 1);
+    const slots = [];
+    const count = Math.min(Math.max(end - start + 1, 0), 200);
+
+    for (let i = 0; i < count; i++) {
+      slots.push(`${prefix}${start + i}`);
+    }
+    return slots;
+  };
+
+  const toggleFacility = (facility) => {
+    if (selectedFacilities.includes(facility)) {
+      setSelectedFacilities(selectedFacilities.filter(f => f !== facility));
+    } else {
+      setSelectedFacilities([...selectedFacilities, facility]);
+    }
+  };
+
   const handleSave = async (e) => {
     e.preventDefault();
+
+    if (!companyName.trim()) {
+      addNotification({ title: 'Validation Error', message: 'Company Name is required.', type: 'error' });
+      return;
+    }
+    if (Number(totalSlots) <= 0) {
+      addNotification({ title: 'Validation Error', message: 'Total slots must be greater than 0.', type: 'error' });
+      return;
+    }
+    if (Number(slotStart) > Number(slotEnd)) {
+      addNotification({ title: 'Validation Error', message: 'Slot start number cannot be greater than end number.', type: 'error' });
+      return;
+    }
+    if (openingTime >= closingTime) {
+      addNotification({ title: 'Validation Error', message: 'Closing time must be after opening time.', type: 'error' });
+      return;
+    }
+
     setSaving(true);
     try {
-      await api.put('/owner/settings', null, {
-        params: {
-          company_name: name,
-          phone,
-          opening_time: openingTime,
-          closing_time: closingTime,
-          price_per_hour: price
-        }
-      });
-      addNotification({
-        title: 'Settings Saved',
-        message: 'Parking facility settings updated in central database.',
-        type: 'success'
-      });
+      const payload = {
+        company_name: companyName.trim(),
+        address: address.trim(),
+        contact_person: contactPerson.trim(),
+        phone: phone.trim(),
+        email: email.trim(),
+        total_slots: Number(totalSlots),
+        slot_prefix: (slotPrefix || 'A').toUpperCase().trim(),
+        slot_start: Number(slotStart),
+        slot_end: Number(slotEnd),
+        opening_time: openingTime,
+        closing_time: closingTime,
+        price_per_hour: Number(price),
+        facilities: selectedFacilities,
+        description: description.trim(),
+        cancellation_policy: cancellationPolicy.trim()
+      };
+
+      const res = await api.put('/owner/lot-settings', payload);
+
+      if (res.data) {
+        addNotification({
+          title: 'Settings Saved',
+          message: 'Parking lot settings updated and persisted in central database.',
+          type: 'success'
+        });
+
+        // Notify parent layout & header to refresh global lot info
+        window.dispatchEvent(new Event('ownerLotSettingsUpdated'));
+      }
     } catch (err) {
+      console.error('Save settings error:', err);
       addNotification({
         title: 'Save Failed',
-        message: 'Could not update settings in database.',
+        message: err.response?.data?.detail || 'Could not update settings in database.',
         type: 'error'
       });
     } finally {
@@ -80,165 +169,323 @@ export default function OwnerLotSettings() {
     }
   };
 
+  const slotPreview = computeSlotPreview();
+
+  if (loading) {
+    return (
+      <div className="p-8 text-center text-slate-500 font-bold space-y-3">
+        <div className="w-10 h-10 border-4 border-[#FFD21F] border-t-transparent rounded-full animate-spin mx-auto" />
+        <p>Loading lot settings from database...</p>
+      </div>
+    );
+  }
+
   return (
     <form onSubmit={handleSave} className="space-y-6">
       
-      {/* Header */}
+      {/* Top Header & Save Button */}
       <div className="p-6 rounded-3xl bg-white border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-black text-[#171717]">Parking Lot Configuration</h2>
-          <p className="text-xs text-slate-500">Operating hours, base pricing rules, and property details</p>
+          <h2 className="text-xl font-black text-[#171717] flex items-center gap-2">
+            <Settings className="w-5 h-5 text-[#FFD21F]" />
+            Parking Lot Settings (Global Source of Truth)
+          </h2>
+          <p className="text-xs text-slate-500 font-medium mt-0.5">
+            Changes save directly to FastAPI & database and reflect instantly across civilian and owner portals.
+          </p>
         </div>
 
         <button
           type="submit"
           disabled={saving}
-          className="px-6 py-3 rounded-2xl bg-[#FFD21F] hover:bg-[#E5B800] text-[#171717] font-extrabold text-xs flex items-center gap-2 shadow-md transition-all active:scale-95 disabled:opacity-50"
+          className="px-6 py-3.5 rounded-2xl bg-[#FFD21F] hover:bg-[#E5B800] text-[#171717] font-extrabold text-xs flex items-center gap-2 shadow-md transition-all active:scale-95 disabled:opacity-50 flex-shrink-0"
         >
           <Save className="w-4 h-4" />
-          {saving ? 'Saving...' : 'Save All Changes'}
+          {saving ? 'Saving to Database...' : 'Save All Changes'}
         </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Left 2 Cols: Basic Info & Hours */}
+        {/* Left 2 Cols: Basic Info, Slot Range, Operating Hours */}
         <div className="lg:col-span-2 space-y-6">
           
-          {/* Basic Information */}
+          {/* Section A: Company & Location */}
           <div className="p-6 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-4">
-            <h3 className="font-extrabold text-base text-[#171717]">Basic Information</h3>
+            <h3 className="font-extrabold text-base text-[#171717] flex items-center gap-2">
+              <MapPin className="w-5 h-5 text-slate-700" />
+              Company Name & Location
+            </h3>
 
             <div className="space-y-4 text-xs font-medium">
               <div>
-                <label className="block text-slate-600 font-bold mb-1">Parking Lot Name</label>
+                <label className="block text-slate-700 font-bold mb-1">Company / Parking Space Name *</label>
                 <input
                   type="text"
                   required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-[#171717] font-bold focus:outline-none focus:border-[#FFD21F]"
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  placeholder="e.g. Phoenix Mall Parking"
+                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-[#171717] font-extrabold text-sm focus:outline-none focus:border-[#FFD21F] focus:ring-2 focus:ring-[#FFD21F]/40"
                 />
               </div>
 
               <div>
-                <label className="block text-slate-600 font-bold mb-1">Address Location</label>
+                <label className="block text-slate-700 font-bold mb-1">Full Street Address *</label>
                 <input
                   type="text"
                   required
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
+                  placeholder="e.g. 11th Main Rd, Velachery, Chennai"
                   className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-[#171717] focus:outline-none focus:border-[#FFD21F]"
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-slate-600 font-bold mb-1">Contact Phone</label>
-                  <input
-                    type="text"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-[#171717]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-600 font-bold mb-1">Support Email</label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-[#171717]"
-                  />
-                </div>
-              </div>
-
               <div>
-                <label className="block text-slate-600 font-bold mb-1">Description</label>
+                <label className="block text-slate-700 font-bold mb-1">Public Description</label>
                 <textarea
-                  rows={3}
+                  rows={2}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-[#171717]"
+                  placeholder="Multi-level covered smart parking facility with 24/7 CCTV & EV Charging."
+                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-[#171717] focus:outline-none focus:border-[#FFD21F]"
                 />
               </div>
             </div>
           </div>
 
-          {/* Operating Hours & Rules */}
+          {/* Section B: Slot Details & Range Configurator */}
           <div className="p-6 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-4">
-            <h3 className="font-extrabold text-base text-[#171717]">Operating Hours & Reservation Rules</h3>
+            <div className="flex items-center justify-between">
+              <h3 className="font-extrabold text-base text-[#171717] flex items-center gap-2">
+                <Layers className="w-5 h-5 text-slate-700" />
+                Slot Range Configuration
+              </h3>
+              <span className="text-[10px] font-extrabold bg-[#171717] text-[#FFD21F] px-2.5 py-1 rounded-lg font-mono">
+                {(slotPrefix || 'A').toUpperCase()}{slotStart} – {(slotPrefix || 'A').toUpperCase()}{slotEnd}
+              </span>
+            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-medium">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-medium">
               <div>
-                <label className="block text-slate-600 font-bold mb-1">Opening Time</label>
-                <input
-                  type="time"
-                  value={openingTime}
-                  onChange={(e) => setOpeningTime(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-[#171717]"
-                />
-              </div>
-              <div>
-                <label className="block text-slate-600 font-bold mb-1">Closing Time</label>
-                <input
-                  type="time"
-                  value={closingTime}
-                  onChange={(e) => setClosingTime(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-[#171717]"
-                />
-              </div>
-              <div>
-                <label className="block text-slate-600 font-bold mb-1">Base Price (₹/hr)</label>
+                <label className="block text-slate-700 font-bold mb-1">Total Slots</label>
                 <input
                   type="number"
-                  value={price}
-                  onChange={(e) => setPrice(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-[#171717] font-bold"
+                  min="1"
+                  max="500"
+                  value={totalSlots}
+                  onChange={(e) => {
+                    const num = Number(e.target.value);
+                    setTotalSlots(num);
+                    setSlotEnd(Number(slotStart) + num - 1);
+                  }}
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[#171717] font-extrabold text-center"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">Slot Prefix</label>
+                <input
+                  type="text"
+                  maxLength={3}
+                  value={slotPrefix}
+                  onChange={(e) => setSlotPrefix(e.target.value.toUpperCase())}
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[#171717] font-black text-center uppercase font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">Start Num</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={slotStart}
+                  onChange={(e) => {
+                    const start = Number(e.target.value);
+                    setSlotStart(start);
+                    setSlotEnd(start + Number(totalSlots) - 1);
+                  }}
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[#171717] font-black text-center font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">End Num</label>
+                <input
+                  type="number"
+                  value={slotEnd}
+                  onChange={(e) => {
+                    const end = Number(e.target.value);
+                    setSlotEnd(end);
+                    if (end >= slotStart) {
+                      setTotalSlots(end - slotStart + 1);
+                    }
+                  }}
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[#171717] font-black text-center font-mono"
                 />
               </div>
             </div>
 
-            <div className="pt-2 text-xs font-medium space-y-3">
+            {/* Generated Slots Array Preview */}
+            <div className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200 space-y-2">
+              <span className="text-[10px] uppercase font-extrabold text-amber-950 tracking-wider block">
+                Generated Slot Range Preview ({slotPreview.length} slots):
+              </span>
+              <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto custom-scrollbar p-2 bg-white rounded-xl border border-amber-200 font-mono text-[11px]">
+                {slotPreview.length > 0 ? (
+                  slotPreview.map(slotNum => (
+                    <span key={slotNum} className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-950 font-black text-[10px] border border-amber-300">
+                      {slotNum}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-slate-400 italic text-[10px]">Invalid slot range</span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Section C: Operating Hours & Rules */}
+          <div className="p-6 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-4">
+            <h3 className="font-extrabold text-base text-[#171717] flex items-center gap-2">
+              <Clock className="w-5 h-5 text-slate-700" />
+              Operating Hours & Pricing Rules
+            </h3>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-medium">
               <div>
-                <label className="block text-slate-600 font-bold mb-1">Cancellation Policy</label>
+                <label className="block text-slate-700 font-bold mb-1">Opening Time *</label>
                 <input
-                  type="text"
-                  value={cancellationPolicy}
-                  onChange={(e) => setCancellationPolicy(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-[#171717]"
+                  type="time"
+                  required
+                  value={openingTime}
+                  onChange={(e) => setOpeningTime(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-[#171717] font-mono font-bold"
                 />
               </div>
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">Closing Time *</label>
+                <input
+                  type="time"
+                  required
+                  value={closingTime}
+                  onChange={(e) => setClosingTime(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-[#171717] font-mono font-bold"
+                />
+              </div>
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">Base Price (₹/hr) *</label>
+                <input
+                  type="number"
+                  min="10"
+                  max="1000"
+                  required
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-[#171717] font-extrabold text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="pt-2 text-xs font-medium space-y-2">
+              <label className="block text-slate-700 font-bold">Cancellation Policy</label>
+              <input
+                type="text"
+                value={cancellationPolicy}
+                onChange={(e) => setCancellationPolicy(e.target.value)}
+                placeholder="Full refund minus 1 hour parking fee if cancelled before start time."
+                className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-[#171717]"
+              />
             </div>
           </div>
 
         </div>
 
-        {/* Right 1 Col: Facilities & Security */}
+        {/* Right 1 Col: Contact Details & Available Facilities */}
         <div className="space-y-6">
           
+          {/* Section D: Contact Details */}
           <div className="p-6 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-4">
-            <h3 className="font-extrabold text-base text-[#171717]">Available Facilities</h3>
-            <p className="text-xs text-slate-500">Displayed on civilian mobile app search card</p>
+            <h3 className="font-extrabold text-base text-[#171717] flex items-center gap-2">
+              <UserCheck className="w-5 h-5 text-slate-700" />
+              Contact Information
+            </h3>
 
-            <div className="space-y-3 pt-2 text-xs font-bold text-[#171717]">
-              {[
-                { id: 'cctv', label: '24/7 CCTV Surveillance' },
-                { id: 'evCharging', label: 'EV Charging Bays' },
-                { id: 'security', label: 'Security Personnel' },
-                { id: 'covered', label: 'Covered Multi-level Garage' },
-                { id: 'accessible', label: 'Accessible Wheelchair Parking' }
-              ].map(fac => (
-                <label key={fac.id} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 cursor-pointer transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={facilities[fac.id]}
-                    onChange={(e) => setFacilities({ ...facilities, [fac.id]: e.target.checked })}
-                    className="w-4 h-4 rounded text-[#171717] focus:ring-[#FFD21F]"
-                  />
-                  <span>{fac.label}</span>
-                </label>
-              ))}
+            <div className="space-y-3 text-xs font-medium">
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">Contact Person</label>
+                <input
+                  type="text"
+                  value={contactPerson}
+                  onChange={(e) => setContactPerson(e.target.value)}
+                  placeholder="e.g. Ricardo Lopez"
+                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-[#171717] font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">Contact Phone</label>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="+91 98765 43210"
+                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-[#171717]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">Support Email</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="support@parkinglot.com"
+                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-[#171717]"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section F: Available Facilities */}
+          <div className="p-6 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-extrabold text-base text-[#171717] flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-amber-500" />
+                Available Facilities
+              </h3>
+              <span className="text-[10px] font-bold text-slate-500">
+                {selectedFacilities.length} Selected
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 font-medium">
+              Checkboxes automatically reflect on civilian parking search and lot cards.
+            </p>
+
+            <div className="space-y-2 pt-1 text-xs font-bold text-[#171717]">
+              {STANDARD_FACILITIES.map(fac => {
+                const isSelected = selectedFacilities.includes(fac);
+                return (
+                  <label
+                    key={fac}
+                    onClick={() => toggleFacility(fac)}
+                    className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                      isSelected
+                        ? 'bg-amber-50 border-amber-300 text-amber-950 font-extrabold shadow-2xs'
+                        : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => {}}
+                      className="w-4 h-4 rounded text-[#171717] focus:ring-[#FFD21F]"
+                    />
+                    <span>{fac}</span>
+                  </label>
+                );
+              })}
             </div>
           </div>
 

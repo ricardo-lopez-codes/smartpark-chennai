@@ -39,6 +39,12 @@ class LotResponse(BaseModel):
     opening_time: str = "06:00"
     closing_time: str = "23:00"
     distance_km: Optional[float] = 1.5
+    contact_person: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    facilities: List[str] = []
+    description: Optional[str] = None
+    cancellation_policy: Optional[str] = None
 
     class Config:
         from_attributes = True

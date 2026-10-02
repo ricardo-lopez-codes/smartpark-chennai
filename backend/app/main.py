@@ -17,6 +17,17 @@ from app.api.owner import router as owner_router
 
 Base.metadata.create_all(bind=engine)
 
+def run_db_migrations():
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("ALTER TABLE parking_lots ADD COLUMN contact_person VARCHAR"))
+            conn.commit()
+        except Exception:
+            pass
+
+run_db_migrations()
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,

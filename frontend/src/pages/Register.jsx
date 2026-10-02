@@ -380,7 +380,7 @@ export default function Register() {
                   required
                   value={companyName}
                   onChange={(e) => setCompanyName(e.target.value)}
-                  placeholder="Saravana Stores Parking"
+                  placeholder="e.g. Express Avenue Parking"
                   className="w-full px-3.5 py-3 rounded-xl bg-slate-50 border border-slate-200 text-[#171717] font-bold focus:outline-none focus:border-slate-900"
                 />
               </div>

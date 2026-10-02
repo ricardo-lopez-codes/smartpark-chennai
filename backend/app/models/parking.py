@@ -29,6 +29,7 @@ class ParkingLot(Base):
     slot_start_num = Column(Integer, default=1, nullable=True)
     slot_end_num = Column(Integer, default=20, nullable=True)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    contact_person = Column(String, nullable=True)
     phone = Column(String, nullable=True, default="+91 44 2434 1122")
     email = Column(String, nullable=True, default="contact@smartpark.in")
     description = Column(String, nullable=True, default="Multi-level covered smart parking facility with automated sensor monitoring and 24/7 security.")

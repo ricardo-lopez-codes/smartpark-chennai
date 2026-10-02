@@ -33,5 +33,44 @@ class LotUpdate(BaseModel):
     max_duration_hours: Optional[int] = None
     cancellation_policy: Optional[str] = None
 
+class OwnerLotSettingsResponse(BaseModel):
+    owner_id: int
+    parking_lot_id: int
+    company_name: str
+    contact_person: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    address: str
+    total_slots: int
+    slot_prefix: str = "A"
+    slot_start: int = 1
+    slot_end: int = 20
+    opening_time: str = "06:00"
+    closing_time: str = "23:00"
+    price_per_hour: float = 40.0
+    facilities: List[str] = []
+    description: Optional[str] = None
+    cancellation_policy: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+class OwnerLotSettingsUpdate(BaseModel):
+    company_name: Optional[str] = None
+    contact_person: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    address: Optional[str] = None
+    total_slots: Optional[int] = None
+    slot_prefix: Optional[str] = None
+    slot_start: Optional[int] = None
+    slot_end: Optional[int] = None
+    opening_time: Optional[str] = None
+    closing_time: Optional[str] = None
+    price_per_hour: Optional[float] = None
+    facilities: Optional[List[str]] = None
+    description: Optional[str] = None
+    cancellation_policy: Optional[str] = None
+
 class NotificationMarkRead(BaseModel):
     notification_id: Optional[str] = None

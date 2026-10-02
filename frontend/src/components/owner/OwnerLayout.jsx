@@ -1,13 +1,47 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, Bell, User, Car, Shield, Wifi } from 'lucide-react';
+import { Menu, Bell } from 'lucide-react';
 import OwnerSidebar from './OwnerSidebar';
 import { useAuth } from '../../context/AuthContext';
+import api from '../../services/api';
 
 export default function OwnerLayout({ children }) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [lotInfo, setLotInfo] = useState({ name: 'Loading facility...', address: '' });
   const { user } = useAuth();
   const location = useLocation();
+
+  useEffect(() => {
+    const fetchLotInfo = async () => {
+      try {
+        const res = await api.get('/owner/lot-settings');
+        if (res.data) {
+          setLotInfo({
+            name: res.data.company_name || "Owner Parking Facility",
+            address: res.data.address || "South Chennai"
+          });
+        }
+      } catch (err) {
+        console.warn('Could not fetch owner lot info:', err);
+        setLotInfo({ name: "My Parking Facility", address: "South Chennai" });
+      }
+    };
+
+    if (user && user.role === 'owner') {
+      fetchLotInfo();
+    }
+
+    const handleSettingsUpdate = () => {
+      if (user && user.role === 'owner') {
+        fetchLotInfo();
+      }
+    };
+
+    window.addEventListener('ownerLotSettingsUpdated', handleSettingsUpdate);
+    return () => {
+      window.removeEventListener('ownerLotSettingsUpdated', handleSettingsUpdate);
+    };
+  }, [user]);
 
   const getPageTitle = () => {
     const path = location.pathname;
@@ -31,7 +65,7 @@ export default function OwnerLayout({ children }) {
         mobileOpen={mobileOpen}
         setMobileOpen={setMobileOpen}
         unreadNotifsCount={2}
-        selectedLotName="Saravana Stores Parking"
+        selectedLotName={lotInfo.name}
       />
 
       {/* Main Content Area */}
@@ -55,7 +89,7 @@ export default function OwnerLayout({ children }) {
                 {getPageTitle()}
               </h1>
               <p className="text-xs text-slate-500 font-medium hidden sm:block">
-                Saravana Stores Parking • Anna Nagar, South Chennai
+                {lotInfo.name} {lotInfo.address ? `• ${lotInfo.address}` : ''}
               </p>
             </div>
           </div>
