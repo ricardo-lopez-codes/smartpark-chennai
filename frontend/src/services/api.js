@@ -1,20 +1,27 @@
 import axios from 'axios';
 
+// Deployed Render backend base URL
+const PRODUCTION_BACKEND_URL = 'https://smartpark-api-h4dn.onrender.com';
+
 // Get base URL from environment variable VITE_API_URL or VITE_API_BASE_URL
 let envUrl = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '').trim();
 
-// Strip trailing slashes
-envUrl = envUrl.replace(/\/+$/, '');
+// Strip /docs or trailing slashes
+envUrl = envUrl.replace(/\/docs\/?$/, '').replace(/\/+$/, '');
 
-// Ensure /api prefix is present on the base URL
-let API_BASE_URL = '/api';
-if (envUrl) {
-  if (envUrl.endsWith('/api')) {
-    API_BASE_URL = envUrl;
+// If envUrl is empty, inspect environment host to decide fallback
+if (!envUrl) {
+  const isLocal = typeof window !== 'undefined' && 
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  if (isLocal) {
+    envUrl = 'http://127.0.0.1:8000';
   } else {
-    API_BASE_URL = `${envUrl}/api`;
+    envUrl = PRODUCTION_BACKEND_URL;
   }
 }
+
+// Ensure /api prefix is present on the base URL
+let API_BASE_URL = envUrl.endsWith('/api') ? envUrl : `${envUrl}/api`;
 
 const api = axios.create({
   baseURL: API_BASE_URL,
