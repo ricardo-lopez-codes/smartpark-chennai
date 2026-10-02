@@ -51,20 +51,39 @@ export const AuthProvider = ({ children }) => {
 
   const registerCivilian = async (name, email, phone, password, vehicle_number) => {
     try {
-      const res = await api.post('/auth/register/civilian', {
-        name,
-        email,
-        phone,
-        password,
-        vehicle_number,
-        role: 'civilian'
-      });
+      console.log('[API] Registering civilian account...');
+      let res;
+      try {
+        res = await api.post('/auth/register/civilian', {
+          name,
+          email,
+          phone,
+          password,
+          vehicle_number,
+          role: 'civilian'
+        });
+      } catch (err1) {
+        if (err1.response?.status === 404) {
+          console.warn('[API] /auth/register/civilian returned 404, retrying /auth/register');
+          res = await api.post('/auth/register', {
+            name,
+            email,
+            phone,
+            password,
+            vehicle_number,
+            role: 'civilian'
+          });
+        } else {
+          throw err1;
+        }
+      }
       const { access_token, user: userData } = res.data;
       localStorage.setItem('smartpark_token', access_token);
       setToken(access_token);
       setUser(userData);
       return { success: true, user: userData };
     } catch (err) {
+      console.error('[API ERROR] registerCivilian failed:', err.response?.status, err.response?.data);
       return {
         success: false,
         error: err.response?.data?.detail || 'Registration failed.'
@@ -74,13 +93,25 @@ export const AuthProvider = ({ children }) => {
 
   const registerOwner = async (ownerData) => {
     try {
-      const res = await api.post('/auth/register/owner', ownerData);
+      console.log('[API] Registering owner account...', ownerData.company_name);
+      let res;
+      try {
+        res = await api.post('/auth/register/owner', { ...ownerData, role: 'owner' });
+      } catch (err1) {
+        if (err1.response?.status === 404) {
+          console.warn('[API] /auth/register/owner returned 404, retrying /auth/register');
+          res = await api.post('/auth/register', { ...ownerData, role: 'owner' });
+        } else {
+          throw err1;
+        }
+      }
       const { access_token, user: userData } = res.data;
       localStorage.setItem('smartpark_token', access_token);
       setToken(access_token);
       setUser(userData);
       return { success: true, user: userData };
     } catch (err) {
+      console.error('[API ERROR] registerOwner failed:', err.response?.status, err.response?.data);
       return {
         success: false,
         error: err.response?.data?.detail || 'Owner registration failed.'

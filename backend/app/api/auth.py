@@ -18,7 +18,6 @@ from app.services.auth import get_password_hash, verify_password, create_access_
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
-@router.post("/register", response_model=Token)
 @router.post("/register/civilian", response_model=Token)
 def register_civilian(user_in: UserCreate, db: Session = Depends(get_db)):
     existing = db.query(User).filter(User.email == user_in.email).first()
@@ -46,6 +45,28 @@ def register_civilian(user_in: UserCreate, db: Session = Depends(get_db)):
         "token_type": "bearer",
         "user": user
     }
+
+@router.post("/register", response_model=Token)
+def register_unified(payload: dict, db: Session = Depends(get_db)):
+    role = payload.get("role", "civilian")
+    if role == "owner" or "company_name" in payload or "person_name" in payload:
+        try:
+            owner_in = OwnerRegisterCreate(**payload)
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Invalid owner registration parameters: {str(e)}"
+            )
+        return register_owner(owner_in, db)
+    else:
+        try:
+            user_in = UserCreate(**payload)
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Invalid civilian registration parameters: {str(e)}"
+            )
+        return register_civilian(user_in, db)
 
 @router.post("/register/owner", response_model=Token)
 def register_owner(owner_in: OwnerRegisterCreate, db: Session = Depends(get_db)):
