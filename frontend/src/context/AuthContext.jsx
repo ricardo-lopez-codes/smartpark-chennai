@@ -40,7 +40,7 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('smartpark_token', access_token);
       setToken(access_token);
       setUser(userData);
-      return { success: true };
+      return { success: true, user: userData };
     } catch (err) {
       return {
         success: false,
@@ -49,9 +49,9 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const register = async (name, email, phone, password, vehicle_number) => {
+  const registerCivilian = async (name, email, phone, password, vehicle_number) => {
     try {
-      const res = await api.post('/auth/register', {
+      const res = await api.post('/auth/register/civilian', {
         name,
         email,
         phone,
@@ -63,11 +63,27 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('smartpark_token', access_token);
       setToken(access_token);
       setUser(userData);
-      return { success: true };
+      return { success: true, user: userData };
     } catch (err) {
       return {
         success: false,
         error: err.response?.data?.detail || 'Registration failed.'
+      };
+    }
+  };
+
+  const registerOwner = async (ownerData) => {
+    try {
+      const res = await api.post('/auth/register/owner', ownerData);
+      const { access_token, user: userData } = res.data;
+      localStorage.setItem('smartpark_token', access_token);
+      setToken(access_token);
+      setUser(userData);
+      return { success: true, user: userData };
+    } catch (err) {
+      return {
+        success: false,
+        error: err.response?.data?.detail || 'Owner registration failed.'
       };
     }
   };
@@ -89,7 +105,17 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, register, logout, updateProfile }}>
+    <AuthContext.Provider value={{
+      user,
+      token,
+      loading,
+      login,
+      register: registerCivilian,
+      registerCivilian,
+      registerOwner,
+      logout,
+      updateProfile
+    }}>
       {children}
     </AuthContext.Provider>
   );

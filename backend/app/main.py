@@ -13,6 +13,7 @@ from app.api.slots import router as slots_router
 from app.api.bookings import router as bookings_router
 from app.api.payments import router as payments_router
 from app.api.demo import router as demo_router
+from app.api.owner import router as owner_router
 
 Base.metadata.create_all(bind=engine)
 
@@ -25,7 +26,7 @@ app = FastAPI(
 # CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -39,6 +40,7 @@ app.include_router(slots_router, prefix=settings.API_V1_STR)
 app.include_router(bookings_router, prefix=settings.API_V1_STR)
 app.include_router(payments_router, prefix=settings.API_V1_STR)
 app.include_router(demo_router, prefix=settings.API_V1_STR)
+app.include_router(owner_router, prefix=settings.API_V1_STR)
 
 @app.on_event("startup")
 def startup_event():
@@ -47,20 +49,10 @@ def startup_event():
 @app.get("/")
 def root():
     return {
-        "status": "ok",
-        "service": "SmartPark API",
         "system": "Smart Parking Availability System — South Chennai",
         "version": settings.VERSION,
         "demo_mode": settings.DEMO_MODE,
         "docs_url": "/docs"
-    }
-
-@app.get("/health")
-def health_check():
-    return {
-        "status": "ok",
-        "service": "SmartPark API",
-        "version": settings.VERSION
     }
 
 @app.websocket("/ws/parking")
