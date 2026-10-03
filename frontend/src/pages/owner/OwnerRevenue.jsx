@@ -90,6 +90,44 @@ export default function OwnerRevenue() {
 
       </div>
 
+      {/* Feature 6: Early Exits & Partial Refunds Financial Summary */}
+      {data?.early_exits_summary && (
+        <div className="p-6 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div>
+              <h3 className="font-extrabold text-base text-[#171717]">Early Exit & Partial Refunds Financial Analytics</h3>
+              <p className="text-xs text-slate-500">Breakdown of original bookings, used time, retained 30% fee, and refunded amounts</p>
+            </div>
+            <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-900 font-extrabold text-xs">
+              {data.early_exits_summary.count} Sessions Processed
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
+            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100">
+              <span className="text-slate-500 block font-medium">Original Booking</span>
+              <span className="text-lg font-extrabold text-slate-900">₹{data.early_exits_summary.original_booking_amount}</span>
+            </div>
+            <div className="p-3.5 rounded-2xl bg-blue-50 border border-blue-100">
+              <span className="text-blue-700 block font-medium">Used Time Amount</span>
+              <span className="text-lg font-extrabold text-blue-950">₹{data.early_exits_summary.used_amount}</span>
+            </div>
+            <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-100">
+              <span className="text-amber-800 block font-medium">Retained Fee (30%)</span>
+              <span className="text-lg font-extrabold text-amber-950">₹{data.early_exits_summary.cancellation_fee}</span>
+            </div>
+            <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-100">
+              <span className="text-rose-700 block font-medium">Refunded Amount</span>
+              <span className="text-lg font-extrabold text-rose-950">₹{data.early_exits_summary.refunded_amount}</span>
+            </div>
+            <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200">
+              <span className="text-emerald-800 block font-medium">Final Earned Revenue</span>
+              <span className="text-lg font-extrabold text-emerald-950">₹{data.early_exits_summary.final_earned_amount}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Daily Trend Chart */}
       <div className="p-6 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-5">
         <div>

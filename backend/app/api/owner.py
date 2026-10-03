@@ -8,7 +8,12 @@ from app.models.parking import ParkingLot, ParkingSlot, ParkingArea
 from app.models.booking import Booking, Payment
 from app.services.auth import get_current_user
 from app.services.sensor_service import update_slot_sensor_status
-from app.schemas.owner import OwnerLotSettingsResponse, OwnerLotSettingsUpdate
+from app.schemas.owner import (
+    OwnerLotSettingsResponse,
+    OwnerLotSettingsUpdate,
+    OwnerDocumentSubmission,
+    OwnerAppointmentScheduling
+)
 
 router = APIRouter(prefix="/owner", tags=["Owner Portal"])
 
@@ -73,7 +78,15 @@ def get_owner_overview(
     avail = sum(1 for s in slots if s.status == "available")
     occ = sum(1 for s in slots if s.status == "occupied")
     res = sum(1 for s in slots if s.status == "reserved")
-    total = len(slots) or lot.total_slots or 1
+    buf_total = lot.buffer_capacity if lot.buffer_capacity is not None else 2
+    buf_in_use = sum(1 for s in slots if s.is_buffer and s.status in ["occupied", "reserved"])
+    overstay_count = db.query(Booking).filter(
+        Booking.parking_lot_id == lot.id,
+        Booking.overstay_status.in_(["WARNING_15MIN", "GRACE_PERIOD", "OVERSTAY_ALERT"])
+    ).count()
+
+    total = len(slots) or lot.total_slots or 20
+    reservable_cap = lot.reservable_capacity or max(1, total - buf_total)
 
     # Check today's bookings & revenue
     now = datetime.now(timezone.utc)
@@ -102,6 +115,20 @@ def get_owner_overview(
         "closing_time": lot.closing_time,
         "is_open": is_open,
         "total_slots": total,
+        "reservable_capacity": reservable_cap,
+        "buffer_capacity": buf_total,
+        "buffer_in_use_count": buf_in_use,
+        "overstay_count": overstay_count,
+        "verification_status": lot.verification_status or "DOCUMENT_VERIFICATION_PENDING",
+        "is_live": lot.is_live,
+        "document_info": lot.document_info,
+        "document_submitted_at": lot.document_submitted_at.isoformat() if lot.document_submitted_at else None,
+        "doc_verified_at": lot.doc_verified_at.isoformat() if lot.doc_verified_at else None,
+        "doc_notes": lot.doc_notes,
+        "inspection_appointment_date": lot.inspection_appointment_date.isoformat() if lot.inspection_appointment_date else None,
+        "inspection_appointment_time": lot.inspection_appointment_time,
+        "inspection_appointment_contact": lot.inspection_appointment_contact,
+        "inspection_appointment_notes": lot.inspection_appointment_notes,
         "available_slots": avail,
         "occupied_slots": occ,
         "reserved_slots": res,
@@ -109,6 +136,106 @@ def get_owner_overview(
         "today_bookings_count": len(today_bookings),
         "occupancy_percent": occupancy_pct,
         "price_per_hour": lot.price_per_hour
+    }
+
+@router.get("/verification-status")
+def get_owner_verification_status(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    lot = get_owner_lot(db, current_user)
+    return {
+        "lot_id": lot.id,
+        "lot_name": lot.name,
+        "address": lot.address,
+        "verification_status": lot.verification_status or "DOCUMENT_VERIFICATION_PENDING",
+        "is_live": lot.is_live,
+        "document_info": lot.document_info,
+        "document_submitted_at": lot.document_submitted_at.isoformat() if lot.document_submitted_at else None,
+        "doc_verified_at": lot.doc_verified_at.isoformat() if lot.doc_verified_at else None,
+        "doc_notes": lot.doc_notes,
+        "inspection_appointment_date": lot.inspection_appointment_date.isoformat() if lot.inspection_appointment_date else None,
+        "inspection_appointment_time": lot.inspection_appointment_time,
+        "inspection_appointment_contact": lot.inspection_appointment_contact,
+        "inspection_appointment_notes": lot.inspection_appointment_notes,
+        "physical_verified_at": lot.physical_verified_at.isoformat() if lot.physical_verified_at else None,
+        "physical_verifier_name": lot.physical_verifier_name,
+        "physical_verification_notes": lot.physical_verification_notes,
+        "total_slots": lot.total_slots
+    }
+
+@router.post("/submit-documents")
+def submit_owner_documents(
+    payload: OwnerDocumentSubmission,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Stage 1: Owner submits facility documents for verification.
+    """
+    lot = get_owner_lot(db, current_user)
+    import json
+    doc_summary = {
+        "commercial_license": payload.commercial_license,
+        "property_deed_ref": payload.property_deed_ref,
+        "gstin": payload.gstin or "N/A",
+        "govt_id_type": payload.govt_id_type or "Aadhaar / PAN",
+        "govt_id_number": payload.govt_id_number or "N/A",
+        "contact_phone": payload.contact_phone or lot.phone,
+        "address": payload.address or lot.address,
+        "additional_notes": payload.additional_notes or ""
+    }
+    
+    lot.document_info = f"Commercial License: {payload.commercial_license} | Deed: {payload.property_deed_ref} | GSTIN: {payload.gstin or 'N/A'}"
+    lot.document_submitted_at = datetime.now(timezone.utc)
+    lot.verification_status = "PHYSICAL_VERIFICATION_PENDING"
+    if payload.contact_phone:
+        lot.phone = payload.contact_phone
+    if payload.address:
+        lot.address = payload.address
+        
+    db.commit()
+    db.refresh(lot)
+    return {
+        "success": True,
+        "message": "Stage 1 ownership documents submitted successfully. Please schedule your 1-to-1 physical inspection appointment.",
+        "verification_status": lot.verification_status,
+        "document_submitted_at": lot.document_submitted_at.isoformat()
+    }
+
+@router.post("/schedule-appointment")
+def schedule_owner_inspection_appointment(
+    payload: OwnerAppointmentScheduling,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Stage 2: Owner schedules 1-to-1 physical inspection & interview appointment with GCC/PARK-A-LOT auditors.
+    """
+    lot = get_owner_lot(db, current_user)
+    
+    # Parse date string (YYYY-MM-DD)
+    try:
+        dt_val = datetime.strptime(payload.appointment_date, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Expected YYYY-MM-DD.")
+        
+    lot.inspection_appointment_date = dt_val
+    lot.inspection_appointment_time = payload.appointment_time
+    lot.inspection_appointment_contact = payload.contact_phone
+    lot.inspection_appointment_notes = payload.site_instructions or "Owner requested on-site inspection & 1-to-1 interview."
+    lot.verification_status = "PHYSICAL_INSPECTION_SCHEDULED"
+    
+    db.commit()
+    db.refresh(lot)
+    return {
+        "success": True,
+        "message": "1-to-1 physical inspection & interview appointment scheduled successfully!",
+        "verification_status": lot.verification_status,
+        "appointment_date": lot.inspection_appointment_date.isoformat(),
+        "appointment_time": lot.inspection_appointment_time,
+        "contact_phone": lot.inspection_appointment_contact,
+        "assigned_verifier": "GCC Senior Smart Parking Auditor - Team South Chennai"
     }
 
 @router.get("/live-slots")
@@ -153,6 +280,72 @@ def get_owner_live_slots(
 
     return results
 
+@router.get("/overstay-alerts")
+def get_owner_overstay_alerts(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Feature 2: Security Alert Section for Owner Dashboard.
+    Lists all overstaying vehicles requiring physical action by security staff.
+    """
+    lot = get_owner_lot(db, current_user)
+    from app.services.overstay_service import evaluate_overstays
+    # Run server-time evaluation
+    import asyncio
+    try:
+        asyncio.run(evaluate_overstays(db))
+    except Exception:
+        pass
+
+    overstay_bookings = db.query(Booking).filter(
+        Booking.parking_lot_id == lot.id,
+        Booking.overstay_status.in_(["WARNING_15MIN", "GRACE_PERIOD", "OVERSTAY_ALERT"])
+    ).order_by(Booking.paid_end_time.asc()).all()
+
+    now = datetime.now(timezone.utc)
+    results = []
+    for b in overstay_bookings:
+        paid_end_t = b.paid_end_time.replace(tzinfo=timezone.utc) if b.paid_end_time.tzinfo is None else b.paid_end_time
+        overstay_mins = max(0, int((now - paid_end_t).total_seconds() // 60))
+        results.append({
+            "id": b.id,
+            "booking_id": b.booking_id,
+            "customer_name": b.user.name if b.user else "Customer",
+            "customer_phone": b.user.phone if b.user else "+91 98765 43210",
+            "vehicle_number": b.vehicle_number or (b.user.vehicle_number if b.user else "TN-09-SP-2026"),
+            "assigned_position": b.assigned_position_name or (b.slot.slot_number if b.slot else "Dynamic Position"),
+            "is_buffer_assigned": b.is_buffer_assigned,
+            "start_time": b.start_time.isoformat() if b.start_time else None,
+            "paid_end_time": paid_end_t.isoformat(),
+            "overstay_status": b.overstay_status,
+            "overstay_duration_minutes": overstay_mins,
+            "security_action_required": b.security_action_required,
+            "security_action_taken": b.security_action_taken,
+            "security_action_notes": b.security_action_notes,
+            "recommended_action": "Apply physical 'No Parking' wheel lock to overstaying vehicle on-site."
+        })
+    return results
+
+@router.post("/overstay-action/{booking_id}")
+def log_owner_security_action(
+    booking_id: int,
+    notes: Optional[str] = Query("Physical 'No Parking' wheel lock applied by security personnel on-site."),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Feature 2: Log physical lock / security action taken against an overstaying vehicle.
+    Software explicitly logs physical lock action by security staff.
+    """
+    lot = get_owner_lot(db, current_user)
+    booking = db.query(Booking).filter(Booking.id == booking_id, Booking.parking_lot_id == lot.id).first()
+    if not booking:
+        raise HTTPException(status_code=404, detail="Overstay booking record not found for this facility.")
+
+    from app.services.overstay_service import record_security_action
+    return record_security_action(booking_id=booking_id, action_notes=notes, db=db)
+
 @router.get("/bookings")
 def get_owner_bookings(
     time_filter: Optional[str] = Query("all"),
@@ -182,18 +375,32 @@ def get_owner_bookings(
 
     results = []
     for b in bookings:
+        earned = b.amount
+        if b.refund_amount is not None:
+            used = b.used_amount or 0.0
+            fee = b.cancellation_fee or 0.0
+            charge = getattr(b, 'booking_charge', 10.0) or 10.0
+            earned = round(used + fee + charge, 2)
+
         results.append({
             "id": b.id,
             "booking_id": b.booking_id,
             "customer_name": b.user.name if b.user else "Customer",
             "customer_phone": b.user.phone if b.user else "+91 98765 43210",
             "vehicle_number": b.user.vehicle_number if b.user else "TN-09-AB-1234",
-            "slot_number": b.slot.slot_number if b.slot else "A1",
+            "slot_number": b.assigned_position_name or (b.slot.slot_number if b.slot else "A1"),
             "booking_date": b.booking_date,
             "start_time": b.start_time,
             "paid_end_time": b.paid_end_time,
             "duration_hours": b.duration_hours,
             "amount": b.amount,
+            "booking_charge": getattr(b, 'booking_charge', 10.0) or 10.0,
+            "used_hours": b.used_hours,
+            "used_amount": b.used_amount,
+            "cancellation_fee": b.cancellation_fee,
+            "refund_amount": b.refund_amount,
+            "refund_status": b.refund_status or "NONE",
+            "earned_amount": earned,
             "status": b.status
         })
 
@@ -316,6 +523,14 @@ def get_owner_revenue(
         r_val = sum(b.amount for b in all_bookings if b.booking_date == d_str)
         daily_trend.append({"day": d_name, "date": d_str, "revenue": round(r_val, 2)})
 
+    # Calculate Early Exits & Refunds Summary (Feature 6)
+    early_exit_bookings = [b for b in all_bookings if b.status in ["EARLY_EXIT", "CANCELLED"] or b.refund_amount is not None]
+    orig_total = sum(b.amount for b in early_exit_bookings)
+    used_total = sum(b.used_amount or 0.0 for b in early_exit_bookings)
+    fee_total = sum(b.cancellation_fee or 0.0 for b in early_exit_bookings)
+    refund_total = sum(b.refund_amount or 0.0 for b in early_exit_bookings)
+    earned_total = sum((b.used_amount or 0.0) + (b.cancellation_fee or 0.0) + (getattr(b, 'booking_charge', 10.0) or 10.0) for b in early_exit_bookings)
+
     return {
         "today_revenue": round(today_rev, 2),
         "weekly_revenue": round(weekly_rev, 2),
@@ -324,7 +539,15 @@ def get_owner_revenue(
             "upi_percent": 65,
             "card_percent": 35
         },
-        "daily_trend": daily_trend
+        "daily_trend": daily_trend,
+        "early_exits_summary": {
+            "count": len(early_exit_bookings),
+            "original_booking_amount": round(orig_total, 2),
+            "used_amount": round(used_total, 2),
+            "cancellation_fee": round(fee_total, 2),
+            "refunded_amount": round(refund_total, 2),
+            "final_earned_amount": round(earned_total, 2)
+        }
     }
 
 @router.get("/slots")

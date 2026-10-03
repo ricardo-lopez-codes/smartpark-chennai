@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from app.database.session import get_db
 from app.models.user import User
 from app.models.booking import Booking
-from app.schemas.booking import BookingCreate, BookingResponse, BookingExtend, BookingCancelResponse
+from app.schemas.booking import BookingCreate, BookingResponse, BookingExtend, BookingCancelResponse, EarlyExitPreviewResponse, EarlyExitResponse
 from app.services.auth import get_current_user
 from app.services.booking_service import (
     create_booking,
@@ -15,6 +15,9 @@ from app.services.booking_service import (
     check_and_expire_booking,
     format_booking_response
 )
+
+from app.services.slot_assignment_service import assign_dynamic_position_on_arrival
+from app.services.overstay_service import evaluate_overstays
 
 router = APIRouter(prefix="/bookings", tags=["Bookings"])
 
@@ -31,7 +34,9 @@ async def make_booking(
         slot_id=booking_in.slot_id,
         duration_hours=booking_in.duration_hours,
         booking_date_str=booking_in.booking_date,
-        start_time_str=booking_in.start_time_str
+        start_time_str=booking_in.start_time_str,
+        vehicle_number=booking_in.vehicle_number or current_user.vehicle_number or "TN-09-SP-2026",
+        payment_method=booking_in.payment_method or "RAZORPAY"
     )
     return format_booking_response(booking)
 
@@ -40,6 +45,7 @@ async def get_active_booking(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    await evaluate_overstays(db)
     now = datetime.now(timezone.utc)
     
     # Query active/upcoming/extended bookings for user
@@ -55,12 +61,33 @@ async def get_active_booking(
 
     return None
 
+@router.post("/{id}/check-in")
+async def check_in_and_assign_position(
+    id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Feature 3 & 4: Vehicle entry / check-in event.
+    Dynamically assigns an available physical parking position (or protected buffer space).
+    """
+    booking = db.query(Booking).filter(Booking.id == id, Booking.user_id == current_user.id).first()
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found.")
+
+    try:
+        res = await assign_dynamic_position_on_arrival(booking_id=id, db=db)
+        return res
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
 @router.get("", response_model=List[BookingResponse])
 async def get_my_bookings(
     status_filter: Optional[str] = Query(None, alias="status"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    await evaluate_overstays(db)
     query = db.query(Booking).filter(Booking.user_id == current_user.id)
     
     if status_filter and status_filter.upper() != "ALL":
@@ -82,12 +109,46 @@ async def get_booking_by_id(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    await evaluate_overstays(db)
     booking = db.query(Booking).filter(Booking.id == id, Booking.user_id == current_user.id).first()
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found.")
 
     await check_and_expire_booking(db, booking)
     return format_booking_response(booking)
+
+@router.get("/{id}/early-exit/preview", response_model=EarlyExitPreviewResponse)
+@router.get("/{id}/early-exit-preview", response_model=EarlyExitPreviewResponse)
+async def preview_early_exit(
+    id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Feature 6: Calculate server-side early exit breakdown preview.
+    Refund calculations are strictly calculated on the backend.
+    """
+    booking = db.query(Booking).filter(Booking.id == id).first()
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking record not found.")
+
+    if booking.user_id != current_user.id and current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Unauthorized to access this booking preview.")
+
+    from app.services.early_exit_service import calculate_early_exit_breakdown
+    return calculate_early_exit_breakdown(booking)
+
+@router.post("/{id}/early-exit", response_model=EarlyExitResponse)
+async def execute_early_exit(
+    id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Feature 6: End parking session early, process partial refund, store payment reference.
+    """
+    from app.services.early_exit_service import process_early_exit
+    return await process_early_exit(booking_id=id, user=current_user, db=db)
 
 @router.post("/{id}/cancel", response_model=BookingCancelResponse)
 async def cancel_booking_endpoint(

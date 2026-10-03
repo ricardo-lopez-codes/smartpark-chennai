@@ -1,4 +1,5 @@
 import random
+from typing import Optional, List
 from datetime import datetime, timedelta, timezone, date, time
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -47,6 +48,16 @@ def format_booking_response(booking: Booking, now: datetime = None) -> dict:
         rem_seconds = 0
         seconds_until_start = 0
 
+    slot_num = "Assigned on arrival"
+    if booking.assigned_position_name:
+        slot_num = booking.assigned_position_name
+    elif booking.slot:
+        slot_num = booking.slot.slot_number
+
+    grace_end_t = booking.grace_end_time or (paid_end_t + timedelta(minutes=15))
+    if grace_end_t.tzinfo is None:
+        grace_end_t = grace_end_t.replace(tzinfo=timezone.utc)
+
     return {
         "id": booking.id,
         "booking_id": booking.booking_id,
@@ -55,24 +66,42 @@ def format_booking_response(booking: Booking, now: datetime = None) -> dict:
         "slot_id": booking.slot_id,
         "booking_date": booking.booking_date or start_t.strftime("%Y-%m-%d"),
         "duration_hours": booking.duration_hours or 2,
-        "parking_lot_name": booking.parking_lot.name,
-        "parking_address": booking.parking_lot.address,
+        "parking_lot_name": booking.parking_lot.name if booking.parking_lot else "PARK-A-LOT Facility",
+        "parking_address": booking.parking_lot.address if booking.parking_lot else "South Chennai",
         "area_name": booking.parking_lot.area.name if booking.parking_lot and booking.parking_lot.area else "South Chennai",
-        "slot_number": booking.slot.slot_number,
+        "slot_number": slot_num,
+        "assigned_position_name": booking.assigned_position_name,
+        "is_buffer_assigned": booking.is_buffer_assigned,
+        "vehicle_number": booking.vehicle_number or "TN-09-SP-2026",
+        "payment_method": booking.payment_method or "RAZORPAY",
         "start_time": start_t,
         "paid_end_time": paid_end_t,
         "buffer_end_time": buffer_end_t,
+        "grace_end_time": grace_end_t,
         "actual_end_time": booking.actual_end_time,
         "remaining_seconds": rem_seconds,
         "seconds_until_start": seconds_until_start,
         "status": computed_status,
+        "overstay_status": booking.overstay_status or "NONE",
+        "overstay_duration_minutes": booking.overstay_duration_minutes or 0,
+        "security_action_required": booking.security_action_required or False,
+        "security_action_taken": booking.security_action_taken or False,
+        "security_action_notes": booking.security_action_notes,
         "amount": booking.amount,
+        "booking_charge": getattr(booking, 'booking_charge', 10.0) or 10.0,
+        "used_hours": booking.used_hours,
+        "used_amount": booking.used_amount,
+        "unused_amount": booking.unused_amount,
+        "cancellation_fee": booking.cancellation_fee,
+        "refund_amount": booking.refund_amount,
+        "refund_status": booking.refund_status or "NONE",
+        "refund_id": booking.refund_id,
         "payment_id": booking.payment_id,
         "created_at": booking.created_at,
-        "latitude": booking.parking_lot.latitude,
-        "longitude": booking.parking_lot.longitude,
-        "opening_time": booking.parking_lot.opening_time,
-        "closing_time": booking.parking_lot.closing_time
+        "latitude": booking.parking_lot.latitude if booking.parking_lot else 13.0,
+        "longitude": booking.parking_lot.longitude if booking.parking_lot else 80.2,
+        "opening_time": booking.parking_lot.opening_time if booking.parking_lot else "06:00",
+        "closing_time": booking.parking_lot.closing_time if booking.parking_lot else "23:00"
     }
 
 def check_slot_availability_for_range(
@@ -106,24 +135,29 @@ async def create_booking(
     db: Session,
     user: User,
     parking_lot_id: int,
-    slot_id: int,
-    duration_hours: int,
+    slot_id: Optional[int] = None,
+    duration_hours: int = 2,
     booking_date_str: str = None,
-    start_time_str: str = None
+    start_time_str: str = None,
+    vehicle_number: str = "TN-09-SP-2026",
+    payment_method: str = "RAZORPAY"
 ) -> Booking:
-    if duration_hours < 1 or duration_hours > 5:
+    if duration_hours < 1 or duration_hours > 8:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Booking duration must be between 1 and 5 hours."
+            detail="Booking duration must be between 1 and 8 hours."
         )
-
-    slot = db.query(ParkingSlot).filter(ParkingSlot.id == slot_id).first()
-    if not slot:
-        raise HTTPException(status_code=404, detail="Parking slot not found.")
 
     lot = db.query(ParkingLot).filter(ParkingLot.id == parking_lot_id).first()
     if not lot:
         raise HTTPException(status_code=404, detail="Parking lot not found.")
+
+    # Check owner verification status
+    if lot.verification_status and lot.verification_status != "APPROVED":
+        raise HTTPException(
+            status_code=403,
+            detail="This parking lot is currently undergoing owner verification and is not yet open for public bookings."
+        )
 
     now = datetime.now(timezone.utc)
 
@@ -140,69 +174,68 @@ async def create_booking(
         start_t = now
         booking_date_str = now.strftime("%Y-%m-%d")
 
-    # Operating hours check
-    open_h, open_m = [int(x) for x in lot.opening_time.split(":")]
-    close_h, close_m = [int(x) for x in lot.closing_time.split(":")]
-
     paid_end_t = start_t + timedelta(hours=duration_hours)
-    buffer_end_t = paid_end_t + timedelta(hours=1)
+    buffer_end_t = paid_end_t + timedelta(minutes=15)
 
-    # Check if start_time is before opening or paid_end is after closing
-    start_time_obj = start_t.time()
-    closing_time_obj = time(close_h, close_m)
-    opening_time_obj = time(open_h, open_m)
+    # CAPACITY CHECK (Feature 3 & 4)
+    # Check active bookings for this lot during the requested window
+    active_count = db.query(Booking).filter(
+        Booking.parking_lot_id == lot.id,
+        Booking.status.in_(["UPCOMING", "ACTIVE", "EXTENDED"]),
+        Booking.start_time < paid_end_t,
+        Booking.paid_end_time > start_t
+    ).count()
 
-    if start_time_obj < opening_time_obj or paid_end_t.time() > closing_time_obj:
-        if paid_end_t.hour > close_h or (paid_end_t.hour == close_h and paid_end_t.minute > close_m):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Parking duration exceeds operating hours ({lot.opening_time} – {lot.closing_time})."
-            )
+    reservable_cap = lot.reservable_capacity if (lot.reservable_capacity is not None and lot.reservable_capacity > 0) else max(1, lot.total_slots - 2)
 
-    # DOUBLE BOOKING PROTECTION CHECK
-    calc_status = check_slot_availability_for_range(
-        db=db,
-        slot_id=slot.id,
-        req_start=start_t,
-        req_buffer_end=buffer_end_t,
-        is_current_slot_check=(abs((start_t - now).total_seconds()) < 1800)
-    )
-
-    if calc_status != "available":
+    if active_count >= reservable_cap:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Sorry, this slot was just booked by another user. Please select another slot."
+            detail=f"Parking facility has reached max reservable capacity ({reservable_cap} slots) for the selected timeframe."
         )
 
+    # If slot_id was provided (legacy/direct), resolve slot, otherwise leave None for dynamic entry assignment
+    target_slot = None
+    if slot_id and slot_id > 0:
+        target_slot = db.query(ParkingSlot).filter(ParkingSlot.id == slot_id).first()
+
     parking_fee = lot.price_per_hour * duration_hours
-    service_fee = 10.0
-    total_amount = parking_fee + service_fee
+    booking_charge_val = 10.0
+    total_amount = parking_fee + booking_charge_val
 
     b_id = generate_booking_id()
-
     booking_status = "UPCOMING" if start_t > now + timedelta(minutes=5) else "ACTIVE"
 
     booking = Booking(
         booking_id=b_id,
         user_id=user.id,
         parking_lot_id=lot.id,
-        slot_id=slot.id,
+        slot_id=target_slot.id if target_slot else 0,
+        assigned_position_id=target_slot.id if target_slot else None,
+        assigned_position_name=target_slot.slot_number if target_slot else None,
+        vehicle_number=vehicle_number or user.vehicle_number or "TN-09-SP-2026",
+        payment_method=payment_method or "RAZORPAY",
         booking_date=booking_date_str,
         duration_hours=duration_hours,
         start_time=start_t,
         paid_end_time=paid_end_t,
         buffer_end_time=buffer_end_t,
+        grace_end_time=buffer_end_t,
         status=booking_status,
+        overstay_status="NONE",
         amount=total_amount,
-        payment_id=f"pay_razorpay_{b_id}"
+        booking_charge=booking_charge_val,
+        payment_id=f"pay_{b_id.lower()}"
     )
 
     db.add(booking)
     db.commit()
     db.refresh(booking)
 
-    if booking_status == "ACTIVE":
-        await update_slot_sensor_status(db, slot.id, "reserved")
+    if target_slot and booking_status == "ACTIVE":
+        await update_slot_sensor_status(db, target_slot.id, "reserved")
+
+    return booking
 
     return booking
 
@@ -231,34 +264,14 @@ async def extend_booking(db: Session, booking_id: int, user: User, additional_ho
     return booking
 
 async def cancel_booking(db: Session, booking_id: int, user: User) -> dict:
-    booking = db.query(Booking).filter(Booking.id == booking_id).first()
-    if not booking:
-        raise HTTPException(status_code=404, detail="Booking not found.")
-
-    if booking.user_id != user.id:
-        raise HTTPException(status_code=403, detail="Unauthorized to cancel this booking.")
-
-    if booking.status in ["COMPLETED", "CANCELLED", "EXPIRED"]:
-        raise HTTPException(status_code=400, detail=f"Booking is already {booking.status}.")
-
-    hourly_rate = booking.parking_lot.price_per_hour
-    cancellation_fee = hourly_rate
-    original_amount = booking.amount
-    refund_amount = max(0.0, original_amount - cancellation_fee)
-
-    booking.status = "CANCELLED"
-    booking.actual_end_time = datetime.now(timezone.utc)
-
-    db.commit()
-
-    await update_slot_sensor_status(db, booking.slot_id, "available")
-
+    from app.services.early_exit_service import process_early_exit
+    res = await process_early_exit(booking_id=booking_id, user=user, db=db)
     return {
-        "booking_id": booking.booking_id,
-        "original_amount": original_amount,
-        "cancellation_fee": cancellation_fee,
-        "refund_amount": refund_amount,
-        "status": "CANCELLED"
+        "booking_id": res["booking_id"],
+        "original_amount": res["original_payment"],
+        "cancellation_fee": res["cancellation_fee"],
+        "refund_amount": res["refund_amount"],
+        "status": res["status"]
     }
 
 async def check_and_expire_booking(db: Session, booking: Booking):

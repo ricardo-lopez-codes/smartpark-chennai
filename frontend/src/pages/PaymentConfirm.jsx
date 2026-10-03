@@ -18,6 +18,8 @@ export default function PaymentConfirm() {
   const [lot, setLot] = useState(null);
   const [slot, setSlot] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [paymentMethod, setPaymentMethod] = useState('FASTAG'); // 'FASTAG' or 'RAZORPAY'
+  const [vehicleNumber, setVehicleNumber] = useState('TN-09-SP-2026');
   const [isRazorpayOpen, setIsRazorpayOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -28,12 +30,12 @@ export default function PaymentConfirm() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [lotRes, slotRes] = await Promise.all([
-          api.get(`/parking-lots/${lotId}`),
-          api.get(`/slots/${slotId}`)
-        ]);
+        const lotRes = await api.get(`/parking-lots/${lotId}`);
         setLot(lotRes.data);
-        setSlot(slotRes.data);
+        if (slotId && slotId !== 'null' && slotId !== 'undefined') {
+          const slotRes = await api.get(`/slots/${slotId}`);
+          setSlot(slotRes.data);
+        }
       } catch (err) {
         console.warn('Error fetching payment confirmation details:', err);
       } finally {
@@ -56,6 +58,53 @@ export default function PaymentConfirm() {
     return `${displayH}:${m < 10 ? '0' + m : m} ${ampm}`;
   };
 
+  const handleFastagPayment = async () => {
+    setSubmitting(true);
+    try {
+      // 1. Create backend booking
+      const bookingRes = await api.post('/bookings', {
+        parking_lot_id: parseInt(lotId, 10),
+        slot_id: (slotId && slotId !== 'null') ? parseInt(slotId, 10) : null,
+        booking_date: dateStr,
+        start_time_str: timeStr,
+        duration_hours: duration,
+        vehicle_number: vehicleNumber.toUpperCase().trim(),
+        payment_method: 'FASTAG'
+      });
+
+      const newBooking = bookingRes.data;
+
+      // 2. Process FASTag deduction via NETC Sandbox service
+      const fastagRes = await api.post('/payments/fastag/pay', null, {
+        params: {
+          booking_id: newBooking.id,
+          amount: totalAmount,
+          vehicle_number: vehicleNumber.toUpperCase().trim()
+        }
+      });
+
+      await fetchActiveBooking();
+
+      addNotification({
+        title: 'FASTag Payment Successful',
+        message: fastagRes.data.message || `₹${totalAmount} debited via NETC FASTag. Position will be assigned on arrival.`,
+        type: 'success'
+      });
+
+      navigate(`/booking-confirmation/${newBooking.id}`);
+    } catch (err) {
+      const errorMsg = err.response?.data?.detail || 'FASTag payment failed.';
+      addNotification({
+        title: 'FASTag Error',
+        message: errorMsg,
+        type: 'error',
+        duration: 7000
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handlePaymentOutcome = async (success) => {
     setIsRazorpayOpen(false);
     
@@ -70,18 +119,18 @@ export default function PaymentConfirm() {
 
     setSubmitting(true);
     try {
-      // 1. Create backend booking with date and time!
       const bookingRes = await api.post('/bookings', {
         parking_lot_id: parseInt(lotId, 10),
-        slot_id: parseInt(slotId, 10),
+        slot_id: (slotId && slotId !== 'null') ? parseInt(slotId, 10) : null,
         booking_date: dateStr,
         start_time_str: timeStr,
-        duration_hours: duration
+        duration_hours: duration,
+        vehicle_number: vehicleNumber.toUpperCase().trim(),
+        payment_method: 'RAZORPAY'
       });
 
       const newBooking = bookingRes.data;
 
-      // 2. Process mock payment verify
       const payOrderRes = await api.post('/payments/create', {
         booking_id: newBooking.id,
         amount: totalAmount
@@ -97,7 +146,7 @@ export default function PaymentConfirm() {
 
       addNotification({
         title: 'Booking Confirmed',
-        message: `Successfully reserved slot ${slot.slot_number} for ${dateStr} at ${format12Hour(timeStr)}!`,
+        message: `Successfully reserved parking capacity for ${dateStr} at ${format12Hour(timeStr)}!`,
         type: 'success'
       });
 
@@ -110,10 +159,6 @@ export default function PaymentConfirm() {
         type: 'error',
         duration: 7000
       });
-      // Redirect back to slot selection if slot is no longer available
-      if (err.response?.status === 409) {
-        navigate(`/slot-selection?lot_id=${lotId}&date=${dateStr}&time=${timeStr}&duration=${duration}`);
-      }
     } finally {
       setSubmitting(false);
     }
@@ -132,7 +177,7 @@ export default function PaymentConfirm() {
         </button>
         <div>
           <h1 className="text-2xl font-extrabold text-[#171717]">Confirm Booking</h1>
-          <p className="text-xs text-slate-500 font-medium">Review reservation details & complete payment</p>
+          <p className="text-xs text-slate-500 font-medium">Review reservation details & select payment method</p>
         </div>
       </div>
 
@@ -151,8 +196,8 @@ export default function PaymentConfirm() {
                   {lot?.address}
                 </p>
               </div>
-              <div className="px-4 py-2 rounded-2xl bg-amber-100 border border-amber-300 text-[#171717] font-extrabold text-base">
-                Slot {slot?.slot_number}
+              <div className="px-4 py-2 rounded-2xl bg-amber-100 border border-amber-300 text-[#171717] font-extrabold text-xs">
+                {slot ? `Slot ${slot.slot_number}` : 'Assigned on Arrival'}
               </div>
             </div>
 
@@ -170,9 +215,63 @@ export default function PaymentConfirm() {
                 <span className="font-extrabold text-slate-900">{duration} Hours</span>
               </div>
               <div>
-                <span className="text-slate-500 block">Extension Buffer</span>
-                <span className="font-bold text-emerald-700">+1 Hour</span>
+                <span className="text-slate-500 block">Protected Buffer</span>
+                <span className="font-bold text-emerald-700">2 Spaces</span>
               </div>
+            </div>
+          </div>
+
+          {/* Vehicle Registration Number Input */}
+          <div className="space-y-2">
+            <label className="text-xs font-extrabold text-slate-700 uppercase tracking-wider block">
+              Vehicle Registration Number (VRN)
+            </label>
+            <input
+              type="text"
+              value={vehicleNumber}
+              onChange={(e) => setVehicleNumber(e.target.value.toUpperCase())}
+              placeholder="e.g. TN-09-SP-2026"
+              className="w-full px-4 py-3 rounded-xl border border-slate-300 font-extrabold text-slate-900 tracking-wider text-sm focus:ring-2 focus:ring-[#FFD21F] focus:border-transparent outline-none uppercase"
+            />
+          </div>
+
+          {/* Feature 1: PAYMENT METHOD SELECTOR (FASTag vs Razorpay) */}
+          <div className="space-y-3">
+            <label className="text-xs font-extrabold text-slate-700 uppercase tracking-wider block">
+              Select Payment Method
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('FASTAG')}
+                className={`p-4 rounded-2xl border text-left transition-all flex flex-col justify-between ${
+                  paymentMethod === 'FASTAG'
+                    ? 'border-[#171717] bg-amber-50/80 ring-2 ring-[#FFD21F]'
+                    : 'border-slate-200 bg-white hover:bg-slate-50'
+                }`}
+              >
+                <div className="flex items-center justify-between w-full">
+                  <span className="font-extrabold text-slate-900 text-sm">FASTag</span>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold">NETC</span>
+                </div>
+                <span className="text-[11px] text-slate-500 mt-2 font-medium">Automatic toll lane RFID deduction</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('RAZORPAY')}
+                className={`p-4 rounded-2xl border text-left transition-all flex flex-col justify-between ${
+                  paymentMethod === 'RAZORPAY'
+                    ? 'border-[#171717] bg-amber-50/80 ring-2 ring-[#FFD21F]'
+                    : 'border-slate-200 bg-white hover:bg-slate-50'
+                }`}
+              >
+                <div className="flex items-center justify-between w-full">
+                  <span className="font-extrabold text-slate-900 text-sm">Razorpay</span>
+                  <CreditCard className="w-4 h-4 text-slate-700" />
+                </div>
+                <span className="text-[11px] text-slate-500 mt-2 font-medium">UPI, Net Banking, Cards & Wallets</span>
+              </button>
             </div>
           </div>
 
@@ -184,7 +283,7 @@ export default function PaymentConfirm() {
               <span className="font-bold text-slate-900">{formatCurrency(parkingFee)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">GCC Smart Gateway Service Fee:</span>
+              <span className="text-slate-500">Service Fee:</span>
               <span className="font-bold text-slate-900">{formatCurrency(serviceFee)}</span>
             </div>
 
@@ -197,18 +296,33 @@ export default function PaymentConfirm() {
           {/* Security badge */}
           <div className="flex items-center gap-2 p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 font-medium">
             <Lock className="w-4 h-4 text-slate-700 flex-shrink-0" />
-            <span>Encrypted Razorpay Checkout Structure • Demo Mode Active</span>
+            <span>
+              {paymentMethod === 'FASTAG'
+                ? 'NETC FASTag Encrypted Sandbox Gateway'
+                : 'Encrypted Razorpay Checkout Structure • Demo Mode Active'}
+            </span>
           </div>
 
           {/* PAY BUTTON */}
-          <button
-            disabled={submitting}
-            onClick={() => setIsRazorpayOpen(true)}
-            className="w-full py-4 rounded-2xl bg-[#FFD21F] hover:bg-[#E5B800] text-[#171717] font-extrabold text-base shadow-md flex items-center justify-center gap-2 transition-all active:scale-98 disabled:opacity-50"
-          >
-            <CreditCard className="w-5 h-5" />
-            {submitting ? 'Creating Booking...' : `Pay ${formatCurrency(totalAmount)}`}
-          </button>
+          {paymentMethod === 'FASTAG' ? (
+            <button
+              disabled={submitting}
+              onClick={handleFastagPayment}
+              className="w-full py-4 rounded-2xl bg-[#FFD21F] hover:bg-[#E5B800] text-[#171717] font-extrabold text-base shadow-md flex items-center justify-center gap-2 transition-all active:scale-98 disabled:opacity-50"
+            >
+              <CreditCard className="w-5 h-5" />
+              {submitting ? 'Debiting FASTag...' : `Pay ${formatCurrency(totalAmount)} via FASTag`}
+            </button>
+          ) : (
+            <button
+              disabled={submitting}
+              onClick={() => setIsRazorpayOpen(true)}
+              className="w-full py-4 rounded-2xl bg-[#FFD21F] hover:bg-[#E5B800] text-[#171717] font-extrabold text-base shadow-md flex items-center justify-center gap-2 transition-all active:scale-98 disabled:opacity-50"
+            >
+              <CreditCard className="w-5 h-5" />
+              {submitting ? 'Creating Booking...' : `Pay ${formatCurrency(totalAmount)} via Razorpay`}
+            </button>
+          )}
         </div>
       )}
 

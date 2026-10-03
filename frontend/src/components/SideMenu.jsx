@@ -18,6 +18,7 @@ export default function SideMenu({ isOpen, onClose }) {
   const menuItems = [
     { label: 'Account', icon: User, path: '/account', desc: 'Manage vehicle & profile' },
     { label: 'Past Bookings', icon: History, path: '/past-bookings', desc: 'Booking history & receipts' },
+    { label: 'Admin Verification', icon: Shield, path: '/admin/verifications', desc: 'Stage 1 & Stage 2 Owner Verification' },
     { label: 'Settings', icon: Settings, path: '/settings', desc: 'Notifications & preferences' },
     { label: 'Help & Support', icon: HelpCircle, path: '/settings#help', desc: 'FAQs & GCC helpline' },
   ];

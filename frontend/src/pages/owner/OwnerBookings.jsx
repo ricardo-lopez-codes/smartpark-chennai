@@ -268,6 +268,39 @@ export default function OwnerBookings() {
                 </div>
                 {getStatusBadge(selectedBooking.status)}
               </div>
+
+              {selectedBooking.refund_amount !== null && selectedBooking.refund_amount !== undefined && (
+                <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 space-y-1.5 text-xs font-medium">
+                  <div className="flex justify-between text-amber-900 font-bold border-b border-amber-200/60 pb-1">
+                    <span>EARLY EXIT FINANCIAL BREAKDOWN</span>
+                    <span>{selectedBooking.refund_status || "REFUNDED"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Original Amount:</span>
+                    <span className="font-bold text-slate-900">₹{selectedBooking.amount}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Used Parking:</span>
+                    <span className="font-bold text-slate-900">₹{selectedBooking.used_amount || 0}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Service Fee:</span>
+                    <span className="font-bold text-slate-900">₹{selectedBooking.booking_charge || 10}</span>
+                  </div>
+                  <div className="flex justify-between text-amber-800 font-bold">
+                    <span>Retained Cancellation Fee (30%):</span>
+                    <span>₹{selectedBooking.cancellation_fee || 0}</span>
+                  </div>
+                  <div className="flex justify-between text-rose-700 font-bold">
+                    <span>Refunded Amount:</span>
+                    <span>₹{selectedBooking.refund_amount || 0}</span>
+                  </div>
+                  <div className="flex justify-between pt-1 border-t border-amber-200 font-black text-emerald-800">
+                    <span>Final Earned Revenue:</span>
+                    <span>₹{selectedBooking.earned_amount || selectedBooking.amount}</span>
+                  </div>
+                </div>
+              )}
             </div>
 
             <button

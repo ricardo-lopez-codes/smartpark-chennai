@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from app.database.session import Base
@@ -20,7 +20,9 @@ class ParkingLot(Base):
     address = Column(String, nullable=False)
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
-    total_slots = Column(Integer, default=0)
+    total_slots = Column(Integer, default=20)
+    buffer_capacity = Column(Integer, default=2, nullable=False)
+    reservable_capacity = Column(Integer, default=18, nullable=False)
     price_per_hour = Column(Float, default=40.0)
     parking_type = Column(String, default="Covered / Multi-level")
     opening_time = Column(String, default="06:00", nullable=False)
@@ -37,6 +39,24 @@ class ParkingLot(Base):
     max_duration_hours = Column(Integer, default=8)
     extension_buffer_hours = Column(Integer, default=1)
     cancellation_policy = Column(String, default="Full refund minus 1 hour parking fee if cancelled before start time.")
+    
+    # Owner Verification Workflow
+    # Statuses: DOCUMENT_VERIFICATION_PENDING, DOCUMENTS_SUBMITTED, PHYSICAL_VERIFICATION_PENDING, PHYSICAL_INSPECTION_SCHEDULED, PHYSICAL_VERIFICATION_COMPLETED, APPROVED, REJECTED
+    verification_status = Column(String, default="DOCUMENT_VERIFICATION_PENDING", nullable=False)
+    is_live = Column(Boolean, default=False, nullable=False)
+    document_info = Column(String, nullable=True, default="Property Ownership & Commercial Authorization License")
+    document_submitted_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    doc_verified_at = Column(DateTime, nullable=True)
+    doc_notes = Column(String, nullable=True)
+    physical_verified_at = Column(DateTime, nullable=True)
+    physical_verifier_name = Column(String, nullable=True)
+    physical_verification_notes = Column(String, nullable=True)
+    verified_capacity = Column(Integer, nullable=True)
+    inspection_appointment_date = Column(DateTime, nullable=True)
+    inspection_appointment_time = Column(String, nullable=True)
+    inspection_appointment_contact = Column(String, nullable=True)
+    inspection_appointment_notes = Column(String, nullable=True)
+
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     area = relationship("ParkingArea", back_populates="lots")
@@ -48,13 +68,14 @@ class ParkingSlot(Base):
     id = Column(Integer, primary_key=True, index=True)
     parking_lot_id = Column(Integer, ForeignKey("parking_lots.id"), nullable=False)
     slot_number = Column(String, nullable=False)
-    # Statuses: available, occupied, reserved, selected, unavailable
+    # Statuses: available, occupied, reserved, selected, unavailable, overstay, buffer
     status = Column(String, default="available", nullable=False)
     sensor_id = Column(String, nullable=True)
     slot_type = Column(String, default="Car")
     zone = Column(String, default="Zone A")
     floor = Column(String, default="Ground Floor")
     price_per_hour = Column(Float, nullable=True)
+    is_buffer = Column(Boolean, default=False, nullable=False)
 
     parking_lot = relationship("ParkingLot", back_populates="slots")
     sensor = relationship("Sensor", back_populates="slot", uselist=False, cascade="all, delete-orphan")

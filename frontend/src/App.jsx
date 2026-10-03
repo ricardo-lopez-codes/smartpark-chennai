@@ -23,6 +23,7 @@ import ViewBooking from './pages/ViewBooking';
 import PastBookings from './pages/PastBookings';
 import Account from './pages/Account';
 import Settings from './pages/Settings';
+import AdminVerification from './pages/AdminVerification';
 
 // Owner Portal Components & Pages
 import ProtectedOwnerRoute from './components/owner/ProtectedOwnerRoute';
@@ -37,6 +38,7 @@ import OwnerAnalytics from './pages/owner/OwnerAnalytics';
 import OwnerNotifications from './pages/owner/OwnerNotifications';
 import OwnerLotSettings from './pages/owner/OwnerLotSettings';
 import OwnerAccount from './pages/owner/OwnerAccount';
+import OwnerVerification from './pages/owner/OwnerVerification';
 
 const ProtectedCivilianRoute = ({ children }) => {
   const { user, loading } = useAuth();
@@ -63,6 +65,7 @@ const AppContent = () => {
           <OwnerLayout>
             <Routes>
               <Route path="/owner" element={<OwnerOverview />} />
+              <Route path="/owner/verification" element={<OwnerVerification />} />
               <Route path="/owner/live-parking" element={<OwnerLiveParking />} />
               <Route path="/owner/bookings" element={<OwnerBookings />} />
               <Route path="/owner/calendar" element={<OwnerCalendar />} />
@@ -98,6 +101,7 @@ const AppContent = () => {
               <Route path="/past-bookings" element={<ProtectedCivilianRoute><PastBookings /></ProtectedCivilianRoute>} />
               <Route path="/account" element={<ProtectedCivilianRoute><Account /></ProtectedCivilianRoute>} />
               <Route path="/settings" element={<ProtectedCivilianRoute><Settings /></ProtectedCivilianRoute>} />
+              <Route path="/admin/verifications" element={<AdminVerification />} />
 
               {/* Fallback */}
               <Route path="*" element={<Navigate to="/" replace />} />

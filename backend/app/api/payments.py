@@ -58,9 +58,50 @@ def verify_payment(
     if result["status"] == "SUCCESS":
         payment.status = "SUCCESS"
         payment.razorpay_payment_id = result["transaction_id"]
+        payment.payment_method = "RAZORPAY"
         db.commit()
         return {"success": True, "message": "Payment verified successfully", "payment_id": payment.razorpay_payment_id}
     else:
         payment.status = "FAILED"
         db.commit()
         raise HTTPException(status_code=400, detail="Payment verification failed or was cancelled.")
+
+@router.post("/fastag/pay")
+def pay_via_fastag(
+    booking_id: int,
+    amount: float,
+    vehicle_number: str = "TN-09-SP-2026",
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Feature 1: Process FASTag payment via NETC Sandbox service layer.
+    """
+    from app.services.fastag_service import process_fastag_payment
+    try:
+        res = process_fastag_payment(
+            booking_id=booking_id,
+            amount=amount,
+            vehicle_number=vehicle_number or current_user.vehicle_number or "TN-09-SP-2026",
+            db=db
+        )
+        return res
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"FASTag transaction error: {str(e)}")
+
+@router.post("/fastag/refund")
+def refund_fastag(
+    payment_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Refund FASTag payment.
+    """
+    from app.services.fastag_service import refund_fastag_payment
+    try:
+        return refund_fastag_payment(payment_id=payment_id, db=db)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))

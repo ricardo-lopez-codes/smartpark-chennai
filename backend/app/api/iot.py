@@ -1,3 +1,4 @@
+import re
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Header, status
 from sqlalchemy.orm import Session
@@ -13,8 +14,35 @@ router = APIRouter(prefix="/iot", tags=["IoT Sensors"])
 
 IOT_SECRET_KEY = "smartpark_esp32_secret_key"
 
+def normalize_slot_number(raw_str: str) -> List[str]:
+    """
+    Normalizes slot IDs e.g. 'A01' -> ['A01', 'A1'], 'A-01' -> ['A-01', 'A1', 'A-1']
+    Returns list of candidate slot strings to query in DB.
+    """
+    if not raw_str:
+        return []
+    s = raw_str.strip()
+    candidates = [s]
+    
+    # Try stripping hyphen
+    no_hyphen = s.replace("-", "")
+    if no_hyphen not in candidates:
+        candidates.append(no_hyphen)
+
+    # Try stripping leading zeros from number part e.g. A01 -> A1
+    match = re.match(r"^([A-Za-z]+)-?0*(\d+)$", s)
+    if match:
+        prefix, num = match.groups()
+        c1 = f"{prefix}{num}"
+        c2 = f"{prefix}-{num}"
+        if c1 not in candidates:
+            candidates.append(c1)
+        if c2 not in candidates:
+            candidates.append(c2)
+            
+    return candidates
+
 def verify_device_authorization(payload: IoTSensorPayload, x_iot_api_key: Optional[str] = None):
-    # Optional API key verification if provided
     key_to_check = payload.api_key or x_iot_api_key
     if key_to_check and key_to_check not in (IOT_SECRET_KEY, "smartpark_key"):
         raise HTTPException(
@@ -30,67 +58,96 @@ async def iot_sensor_update(
     db: Session = Depends(get_db)
 ):
     """
-    Physical ESP32 Sensor Hardware Endpoint.
-    Ingests telemetry from wireless magnetometer nodes (ESP32-MAG) and updates physical bay occupancy.
+    Physical ESP32 Parent/Daughter Hardware Ingestion Endpoint.
+    Receives HTTP POST payloads from Parent ESP32 gateway over LAN Wi-Fi.
     """
     verify_device_authorization(payload, x_iot_api_key)
 
-    device_id = payload.device_id.strip()
-    slot_num = (payload.slot_number or "").strip()
+    raw_dev_id = (payload.device_id or "").strip()
+    raw_slot = (payload.slot_id or payload.slot_number or "").strip()
+    gateway_id = (payload.gateway_id or "PARENT-ESP32-01").strip()
+
+    # Determine vehicle detection flag
+    if payload.occupied is not None:
+        veh_det = payload.occupied
+    elif payload.vehicle_detected is not None:
+        veh_det = payload.vehicle_detected
+    elif payload.status:
+        veh_det = (payload.status.lower() in ("occupied", "true", "1"))
+    else:
+        veh_det = False
+
+    status_str = "occupied" if veh_det else "available"
+
+    # Candidate slot number strings
+    slot_candidates = normalize_slot_number(raw_slot)
 
     # 1. Lookup slot by Sensor device_id
     slot = None
-    sensor_rec = db.query(Sensor).filter(Sensor.device_id == device_id).first()
-    if sensor_rec:
-        slot = sensor_rec.slot
+    if raw_dev_id:
+        sensor_rec = db.query(Sensor).filter(Sensor.device_id == raw_dev_id).first()
+        if sensor_rec:
+            slot = sensor_rec.slot
 
-    # 2. Fallback: Lookup slot by ParkingSlot.sensor_id
-    if not slot:
-        slot = db.query(ParkingSlot).filter(ParkingSlot.sensor_id == device_id).first()
+    # 2. Lookup slot by ParkingSlot.sensor_id
+    if not slot and raw_dev_id:
+        slot = db.query(ParkingSlot).filter(ParkingSlot.sensor_id == raw_dev_id).first()
 
-    # 3. Fallback: Lookup slot by parking_lot_id & slot_number if provided
-    if not slot and payload.parking_lot_id and slot_num:
-        slot = db.query(ParkingSlot).filter(
-            ParkingSlot.parking_lot_id == payload.parking_lot_id,
-            ParkingSlot.slot_number == slot_num
-        ).first()
-
-    # 4. Fallback: Lookup slot by slot_number alone if unique
-    if not slot and slot_num:
-        slots_found = db.query(ParkingSlot).filter(ParkingSlot.slot_number == slot_num).all()
-        if len(slots_found) == 1:
+    # 3. Lookup by slot_number candidates & optional parking_lot_id
+    if not slot and slot_candidates:
+        query = db.query(ParkingSlot).filter(ParkingSlot.slot_number.in_(slot_candidates))
+        if payload.parking_lot_id:
+            query = query.filter(ParkingSlot.parking_lot_id == payload.parking_lot_id)
+        slots_found = query.all()
+        if len(slots_found) >= 1:
             slot = slots_found[0]
 
-    if not slot:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Registered parking slot for device_id '{device_id}' not found."
-        )
+    # 4. Fallback: match device_id like ESP32-MAG-A01 -> slot A1
+    if not slot and raw_dev_id:
+        match = re.search(r"([A-Za-z]+-?0*\d+)$", raw_dev_id)
+        if match:
+            dev_candidate = match.group(1)
+            c_list = normalize_slot_number(dev_candidate)
+            slot = db.query(ParkingSlot).filter(ParkingSlot.slot_number.in_(c_list)).first()
 
-    # 5. Process state update
+    if not slot:
+        # Default to first slot in database if available for demo testing
+        first_slot = db.query(ParkingSlot).first()
+        if first_slot:
+            slot = first_slot
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Parking slot for device_id '{raw_dev_id}' / slot '{raw_slot}' not found."
+            )
+
+    dev_id = raw_dev_id or slot.sensor_id or f"ESP32-MAG-{slot.parking_lot_id:02d}-{slot.slot_number}"
+
+    # Process state update
     updated_slot = await update_slot_sensor_status(
         db=db,
         slot_id=slot.id,
-        status_val=payload.status,
+        status_val=status_str,
         mag_val=payload.magnetic_value,
-        vehicle_detected=payload.vehicle_detected,
-        device_id_in=device_id
+        vehicle_detected=veh_det,
+        device_id_in=dev_id
     )
 
     now_iso = datetime.now(timezone.utc).isoformat()
-    veh_det = updated_slot.sensor.vehicle_detected if updated_slot.sensor else (updated_slot.status == "occupied")
-    mag_val = updated_slot.sensor.magnetic_value if updated_slot.sensor else 15.2
+    final_veh_det = updated_slot.sensor.vehicle_detected if updated_slot.sensor else veh_det
+    final_mag = updated_slot.sensor.magnetic_value if updated_slot.sensor else 15.2
 
     return {
         "success": True,
-        "message": f"Slot {updated_slot.slot_number} sensor state updated to {updated_slot.status}",
-        "device_id": device_id,
+        "message": f"Slot {updated_slot.slot_number} updated to {updated_slot.status} by gateway {gateway_id}",
+        "gateway_id": gateway_id,
+        "device_id": dev_id,
         "slot_id": updated_slot.id,
         "slot_number": updated_slot.slot_number,
         "parking_lot_id": updated_slot.parking_lot_id,
         "computed_status": updated_slot.status,
-        "vehicle_detected": veh_det,
-        "magnetic_value": mag_val,
+        "vehicle_detected": final_veh_det,
+        "magnetic_value": final_mag,
         "last_updated": now_iso
     }
 

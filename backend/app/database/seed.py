@@ -100,6 +100,10 @@ def seed_db():
                 latitude=13.0067,
                 longitude=80.2020,
                 total_slots=20,
+                buffer_capacity=2,
+                reservable_capacity=18,
+                verification_status="APPROVED",
+                is_live=True,
                 price_per_hour=40.0,
                 parking_type="Multi-Level Commercial Smart Lot",
                 opening_time="06:00",
@@ -116,11 +120,15 @@ def seed_db():
             db.commit()
             db.refresh(demo_lot)
         else:
-            # Ensure name and details are set correctly
+            # Ensure name, details, and verification status are set correctly
             demo_lot.name = "PARK-A-LOT Demo Parking"
             demo_lot.contact_person = "Demo Manager"
             demo_lot.phone = "+91 98765 43210"
             demo_lot.email = "owner@smartpark.in"
+            demo_lot.buffer_capacity = 2
+            demo_lot.reservable_capacity = 18
+            demo_lot.verification_status = "APPROVED"
+            demo_lot.is_live = True
             db.commit()
 
         # 6. Ensure 20 slots for Demo Owner Lot (A1 to A20)
@@ -131,13 +139,15 @@ def seed_db():
                 slot_num = f"A{i}"
                 if slot_num not in existing_numbers:
                     status = "occupied" if i in [2, 5, 8, 12] else ("reserved" if i in [4, 15] else "available")
+                    is_buf = (i >= 19)
                     slot = ParkingSlot(
                         parking_lot_id=demo_lot.id,
                         slot_number=slot_num,
                         status=status,
                         zone="Zone A",
                         price_per_hour=40.0,
-                        sensor_id=f"ESP32-MAG-DEMO-{slot_num}"
+                        sensor_id=f"ESP32-MAG-DEMO-{slot_num}",
+                        is_buffer=is_buf
                     )
                     db.add(slot)
                     db.commit()
@@ -249,7 +259,8 @@ def seed_db():
             {"name": "Vadapalani", "lots": [{"name": "Commercial Theatre Parking", "address": "100 Feet Rd, Vadapalani, Chennai", "latitude": 13.0500, "longitude": 80.2121, "total_slots": 150, "price_per_hour": 50.0, "parking_type": "Multi-Level Automated"}]},
             {"name": "T. Nagar", "lots": [{"name": "T. Nagar Commercial Hub Parking", "address": "Pondy Bazaar, T. Nagar, Chennai", "latitude": 13.0418, "longitude": 80.2341, "total_slots": 200, "price_per_hour": 50.0, "parking_type": "GCC Smart Multi-Level"}]},
             {"name": "Adyar", "lots": [{"name": "Adyar Depot Commercial Parking", "address": "Lattice Bridge Rd, Adyar, Chennai", "latitude": 13.0012, "longitude": 80.2565, "total_slots": 110, "price_per_hour": 35.0, "parking_type": "Surface Plaza"}]},
-            {"name": "Velachery", "lots": [{"name": "Phoenix Marketcity Annex Parking", "address": "Velachery Main Rd, Velachery, Chennai", "latitude": 12.9815, "longitude": 80.2180, "total_slots": 220, "price_per_hour": 60.0, "parking_type": "Premium Smart Garage"}]}
+            {"name": "Velachery", "lots": [{"name": "Phoenix Marketcity Annex Parking", "address": "Velachery Main Rd, Velachery, Chennai", "latitude": 12.9815, "longitude": 80.2180, "total_slots": 220, "price_per_hour": 60.0, "parking_type": "Premium Smart Garage"}]},
+            {"name": "Marina", "lots": [{"name": "Marina Beach Light House Parking", "address": "Kamarajar Salai, Marina Beach, Chennai", "latitude": 13.0382, "longitude": 80.2785, "total_slots": 100, "price_per_hour": 30.0, "parking_type": "Beachfront Open Plaza"}]}
         ]
 
         for area_info in areas_data:
@@ -270,6 +281,10 @@ def seed_db():
                         latitude=lot_info["latitude"],
                         longitude=lot_info["longitude"],
                         total_slots=lot_info["total_slots"],
+                        buffer_capacity=2,
+                        reservable_capacity=max(1, lot_info["total_slots"] - 2),
+                        verification_status="APPROVED",
+                        is_live=True,
                         price_per_hour=lot_info["price_per_hour"],
                         parking_type=lot_info["parking_type"],
                         opening_time="06:00",
@@ -289,6 +304,13 @@ def seed_db():
                             sensor_id=f"ESP32-MAG-{lot.id:02d}-{slot_num}"
                         )
                         db.add(slot)
+                    db.commit()
+                else:
+                    lot.verification_status = "APPROVED"
+                    lot.is_live = True
+                    lot.area_id = area.id
+                    if not lot.reservable_capacity:
+                        lot.reservable_capacity = max(1, (lot.total_slots or 20) - 2)
                     db.commit()
 
         print("Database seed completed successfully!")

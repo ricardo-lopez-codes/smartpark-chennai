@@ -31,6 +31,10 @@ def get_parking_lots(
     db: Session = Depends(get_db)
 ):
     query = db.query(ParkingLot)
+    # Feature 5: Only APPROVED / LIVE parking lots are publicly bookable
+    query = query.filter(
+        (ParkingLot.verification_status == "APPROVED") | (ParkingLot.is_live == True)
+    )
 
     if area_id:
         query = query.filter(ParkingLot.area_id == area_id)

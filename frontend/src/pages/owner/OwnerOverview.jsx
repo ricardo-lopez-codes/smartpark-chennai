@@ -15,6 +15,95 @@ import {
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 
+function OverstayAlertSection() {
+  const [alerts, setAlerts] = useState([]);
+  const [loadingAlerts, setLoadingAlerts] = useState(true);
+
+  const fetchAlerts = async () => {
+    try {
+      const res = await api.get('/owner/overstay-alerts');
+      setAlerts(res.data || []);
+    } catch (err) {
+      console.warn('Error fetching overstay alerts:', err);
+    } finally {
+      setLoadingAlerts(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAlerts();
+    const timer = setInterval(fetchAlerts, 10000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const handleAction = async (bookingId) => {
+    try {
+      await api.post(`/owner/overstay-action/${bookingId}`);
+      fetchAlerts();
+    } catch (err) {
+      console.warn('Error logging security action:', err);
+    }
+  };
+
+  if (loadingAlerts && alerts.length === 0) return null;
+  if (alerts.length === 0) return null;
+
+  return (
+    <div className="p-6 rounded-3xl bg-rose-50 border border-rose-300 text-rose-950 shadow-sm space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <div className="p-2.5 rounded-xl bg-rose-200 text-rose-900">
+            <Clock className="w-5 h-5 animate-pulse" />
+          </div>
+          <div>
+            <h3 className="font-extrabold text-base text-rose-950">Overstay Security Alerts ({alerts.length})</h3>
+            <p className="text-xs text-rose-800 font-medium">Vehicles exceeding paid duration and grace period</p>
+          </div>
+        </div>
+        <span className="px-3 py-1 rounded-full bg-rose-200 text-rose-900 font-extrabold text-xs">
+          Physical Action Needed
+        </span>
+      </div>
+
+      <div className="space-y-3">
+        {alerts.map((a) => (
+          <div key={a.id} className="p-4 rounded-2xl bg-white border border-rose-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="font-extrabold text-slate-900 text-sm">{a.vehicle_number}</span>
+                <span className="text-xs font-bold px-2.5 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300">
+                  {a.assigned_position} {a.is_buffer_assigned ? '(Buffer Space)' : ''}
+                </span>
+                <span className="text-xs font-extrabold px-2 py-0.5 rounded-md bg-rose-100 text-rose-800">
+                  +{a.overstay_duration_minutes} Mins Overdue
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 font-medium">
+                Customer: <strong>{a.customer_name}</strong> ({a.customer_phone}) • Code: {a.booking_id}
+              </p>
+              <p className="text-xs text-rose-700 font-bold">
+                ⚠️ Recommended Action: {a.recommended_action}
+              </p>
+            </div>
+
+            <button
+              disabled={a.security_action_taken}
+              onClick={() => handleAction(a.id)}
+              className={`px-4 py-2.5 rounded-xl font-extrabold text-xs shadow-xs transition-all shrink-0 ${
+                a.security_action_taken
+                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 cursor-default'
+                  : 'bg-rose-900 hover:bg-rose-950 text-white active:scale-95'
+              }`}
+            >
+              {a.security_action_taken ? '✓ Lock Action Logged' : 'Log Physical Lock Applied'}
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function OwnerOverview() {
   const { user } = useAuth();
   const [data, setData] = useState(null);
@@ -134,17 +223,65 @@ export default function OwnerOverview() {
         </div>
       </div>
 
-      {/* 7 Real Database Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 sm:gap-4">
+      {/* Feature 5: OWNER TWO-STAGE VERIFICATION BANNER */}
+      {data?.verification_status !== 'APPROVED' && (
+        <div className="p-6 rounded-3xl bg-amber-50 border border-amber-300 text-amber-950 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-800 px-2.5 py-0.5 rounded-full bg-amber-200/80 border border-amber-300">
+              STAGE VERIFICATION IN PROGRESS: {data?.verification_status || 'DOCUMENT_VERIFICATION_PENDING'}
+            </span>
+            <h3 className="font-extrabold text-base text-amber-950 pt-1">Parking Facility Verification & Inspection</h3>
+            <p className="text-xs text-amber-900 font-medium max-w-xl">
+              {data?.verification_status === 'PHYSICAL_INSPECTION_SCHEDULED'
+                ? 'Stage 1 Documents submitted and Stage 2 1-to-1 physical inspection appointment is scheduled!'
+                : data?.verification_status === 'PHYSICAL_VERIFICATION_PENDING'
+                ? 'Stage 1 Documents submitted! Please schedule your 1-to-1 physical inspection & interview appointment.'
+                : 'Stage 1 Document verification pending. Submit ownership proofs & schedule your 1-to-1 physical inspection.'}
+            </p>
+          </div>
+          <Link
+            to="/owner/verification"
+            className="px-4 py-2.5 rounded-xl bg-amber-900 hover:bg-amber-950 text-white font-extrabold text-xs shrink-0 shadow-sm transition-all active:scale-95 flex items-center gap-1.5"
+          >
+            <span>Complete Verification & Interview</span>
+            <ChevronRight className="w-4 h-4 text-[#FFD21F]" />
+          </Link>
+        </div>
+      )}
+
+      {/* 8 Database Summary & Feature Indicators */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 sm:gap-4">
         
         {/* Total Slots */}
         <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-1">
           <div className="flex items-center justify-between text-slate-500 text-xs font-bold">
-            <span>Total Slots</span>
+            <span>Total Capacity</span>
             <Layers className="w-4 h-4 text-slate-400" />
           </div>
           <p className="text-2xl font-black text-[#171717]">{totalSlots}</p>
-          <span className="text-[10px] text-slate-400 font-medium block">Registered in DB</span>
+          <span className="text-[10px] text-slate-400 font-medium block">Physical spaces</span>
+        </div>
+
+        {/* Reservable Capacity */}
+        <div className="p-4 rounded-2xl bg-blue-50/70 border border-blue-200 shadow-xs space-y-1">
+          <div className="flex items-center justify-between text-blue-900 text-xs font-bold">
+            <span>Reservable</span>
+            <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+          </div>
+          <p className="text-2xl font-black text-blue-950">{data?.reservable_capacity || (totalSlots - 2)}</p>
+          <span className="text-[10px] text-blue-700 font-bold block">Normal capacity</span>
+        </div>
+
+        {/* Feature 4: Buffer Capacity */}
+        <div className="p-4 rounded-2xl bg-amber-50/80 border border-amber-300 shadow-xs space-y-1">
+          <div className="flex items-center justify-between text-amber-950 text-xs font-bold">
+            <span>Protected Buffer</span>
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+          </div>
+          <p className="text-2xl font-black text-amber-950">{data?.buffer_capacity || 2}</p>
+          <span className="text-[10px] text-amber-800 font-bold block">
+            {data?.buffer_in_use_count ? `${data.buffer_in_use_count} In Use` : 'Protected spaces'}
+          </span>
         </div>
 
         {/* Available */}
@@ -154,7 +291,7 @@ export default function OwnerOverview() {
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
           </div>
           <p className="text-2xl font-black text-emerald-950">{availableSlots}</p>
-          <span className="text-[10px] text-emerald-700 font-bold block">Ready for civilians</span>
+          <span className="text-[10px] text-emerald-700 font-bold block">Ready for arrivals</span>
         </div>
 
         {/* Occupied */}
@@ -167,36 +304,26 @@ export default function OwnerOverview() {
           <span className="text-[10px] text-rose-700 font-bold block">Active parked</span>
         </div>
 
-        {/* Reserved */}
-        <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200 shadow-xs space-y-1">
-          <div className="flex items-center justify-between text-amber-900 text-xs font-bold">
-            <span>Reserved</span>
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+        {/* Feature 2: Overstay Count */}
+        <div className="p-4 rounded-2xl bg-rose-100/90 border border-rose-300 shadow-xs space-y-1">
+          <div className="flex items-center justify-between text-rose-950 text-xs font-bold">
+            <span>Overstay Alerts</span>
+            <Clock className="w-4 h-4 text-rose-700 animate-pulse" />
           </div>
-          <p className="text-2xl font-black text-amber-950">{reservedSlots}</p>
-          <span className="text-[10px] text-amber-800 font-bold block">Upcoming arrivals</span>
+          <p className="text-2xl font-black text-rose-950">{data?.overstay_count || 0}</p>
+          <span className="text-[10px] text-rose-900 font-extrabold block">Action Required</span>
         </div>
 
         {/* Today's Revenue */}
-        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-1 col-span-2 sm:col-span-1">
+        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-1">
           <div className="flex items-center justify-between text-slate-500 text-xs font-bold">
             <span>Today's Revenue</span>
             <IndianRupee className="w-4 h-4 text-emerald-600" />
           </div>
           <p className="text-2xl font-black text-[#171717]">₹{todayRevenue.toLocaleString()}</p>
           <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-0.5">
-            <TrendingUp className="w-3 h-3" /> Live DB calculation
+            <TrendingUp className="w-3 h-3" /> Live DB
           </span>
-        </div>
-
-        {/* Today's Bookings */}
-        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-1">
-          <div className="flex items-center justify-between text-slate-500 text-xs font-bold">
-            <span>Bookings</span>
-            <CalendarCheck className="w-4 h-4 text-blue-600" />
-          </div>
-          <p className="text-2xl font-black text-[#171717]">{todayBookingsCount}</p>
-          <span className="text-[10px] text-slate-500 font-medium block">Total reservations</span>
         </div>
 
         {/* Occupancy % */}
@@ -205,16 +332,19 @@ export default function OwnerOverview() {
             <span>Occupancy</span>
             <span className="text-xs font-black">{occupancyPct}%</span>
           </div>
-          <div className="w-full h-2.5 bg-white rounded-full overflow-hidden">
+          <div className="w-full h-2 bg-white rounded-full overflow-hidden mt-1">
             <div
               className="h-full bg-[#171717] rounded-full transition-all duration-500"
               style={{ width: `${occupancyPct}%` }}
             />
           </div>
-          <span className="text-[10px] text-[#171717] font-bold block pt-0.5">Real-time DB load</span>
+          <span className="text-[10px] text-[#171717] font-bold block pt-0.5">Real-time load</span>
         </div>
 
       </div>
+
+      {/* FEATURE 2: SECURITY & OVERSTAY ALERTS SECTION */}
+      <OverstayAlertSection />
 
       {/* Main Section: Quick Status & Facilities */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

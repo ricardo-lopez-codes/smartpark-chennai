@@ -2,6 +2,7 @@ import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
+  ShieldCheck,
   Grid,
   CalendarCheck,
   Calendar,
@@ -30,6 +31,7 @@ export default function OwnerSidebar({ mobileOpen, setMobileOpen, unreadNotifsCo
 
   const navItems = [
     { label: 'Overview', icon: LayoutDashboard, path: '/owner', end: true },
+    { label: 'Facility Verification', icon: ShieldCheck, path: '/owner/verification' },
     { label: 'Live Parking', icon: Grid, path: '/owner/live-parking' },
     { label: 'Bookings', icon: CalendarCheck, path: '/owner/bookings' },
     { label: 'Calendar', icon: Calendar, path: '/owner/calendar' },

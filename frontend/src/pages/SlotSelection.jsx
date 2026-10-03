@@ -127,26 +127,46 @@ export default function SlotSelection() {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
-          {/* Left Column: Visual Slot Grid */}
+          {/* Left Column: Dynamic Slot Assignment Notice & Lot Details */}
           <div className="lg:col-span-2 space-y-6">
             <div className="p-6 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-5">
               <div className="flex flex-wrap items-center justify-between pb-3 border-b border-slate-100 gap-2">
                 <div>
                   <h2 className="font-extrabold text-[#171717] text-base">
-                    Available slots for {formatDateDisplay(dateStr)} at {format12Hour(timeStr)}
+                    Facility Reservable Capacity for {formatDateDisplay(dateStr)} at {format12Hour(timeStr)}
                   </h2>
-                  <p className="text-xs text-slate-500 font-medium">Date & time specific availability</p>
+                  <p className="text-xs text-slate-500 font-medium">Real-time facility capacity reservation</p>
                 </div>
                 <span className="text-xs text-emerald-700 font-extrabold px-3 py-1 bg-emerald-50 border border-emerald-200 rounded-full">
-                  Available: {availabilityData?.available_slots}
+                  Available Capacity: {availabilityData?.available_slots || lot?.total_slots} Slots
                 </span>
               </div>
 
-              <SlotGrid
-                slots={slots}
-                selectedSlot={selectedSlot}
-                onSelectSlot={(slot) => setSelectedSlot(slot)}
-              />
+              {/* Dynamic Assignment Highlight Card */}
+              <div className="p-6 rounded-2xl bg-amber-50/80 border border-amber-200 text-slate-800 space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-[#FFD21F] flex items-center justify-center font-bold text-[#171717] text-xl shadow-xs">
+                    🅿️
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-[#171717] text-base">Dynamic Physical Position Assignment</h3>
+                    <p className="text-xs text-slate-600 font-medium">No need to manually pick A1, A2, or A3!</p>
+                  </div>
+                </div>
+
+                <p className="text-xs text-slate-700 leading-relaxed font-medium bg-white/70 p-3 rounded-xl border border-amber-100">
+                  <strong className="text-amber-900 font-bold">How it works:</strong> You are reserving parking capacity and time at <strong>{lot?.name}</strong>. Your exact physical parking position (e.g. Ground Floor - Slot A5) will be automatically and dynamically assigned by our smart sensor system when your vehicle enters the lot upon arrival.
+                </p>
+              </div>
+
+              {/* Protected Buffer Space Protection Banner */}
+              <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-start gap-3 text-xs">
+                <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-extrabold text-emerald-950 block">Protected Buffer Guarantee Enabled</span>
+                  <span className="text-emerald-800 font-medium">This facility protects your prepaid reservation with 2 dedicated buffer spaces. Even if an earlier vehicle overstays, your reservation is guaranteed!</span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -157,11 +177,11 @@ export default function SlotSelection() {
               {/* Selected Slot Badge */}
               <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-between">
                 <div>
-                  <span className="text-xs text-amber-900 font-bold block">Selected Slot</span>
-                  <span className="text-2xl font-extrabold text-[#171717]">{selectedSlot ? selectedSlot.slot_number : 'None'}</span>
+                  <span className="text-xs text-amber-900 font-bold block">Assigned Position</span>
+                  <span className="text-sm font-extrabold text-[#171717]">Assigned on Arrival</span>
                 </div>
                 <div className="w-10 h-10 rounded-xl bg-[#FFD21F] text-[#171717] flex items-center justify-center font-bold text-lg">
-                  🅿️
+                  ⚡
                 </div>
               </div>
 
@@ -191,19 +211,11 @@ export default function SlotSelection() {
                   <span className="text-slate-500">Paid Until:</span>
                   <span className="font-bold text-slate-900">{paidEnd}</span>
                 </div>
-                <div className="flex justify-between text-emerald-700 font-bold">
-                  <span>Extension Buffer Until:</span>
-                  <span>{bufferEnd}</span>
-                </div>
 
                 <div className="pt-3 border-t border-slate-100 space-y-1.5">
                   <div className="flex justify-between">
                     <span className="text-slate-500">Parking Fee:</span>
                     <span className="font-bold text-slate-900">{formatCurrency(parkingFee)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Service Fee:</span>
-                    <span className="font-bold text-slate-900">{formatCurrency(serviceFee)}</span>
                   </div>
                   <div className="flex justify-between pt-2 border-t border-slate-200 text-sm font-extrabold text-[#171717]">
                     <span>Total Amount:</span>
@@ -214,9 +226,8 @@ export default function SlotSelection() {
 
               {/* CTA Button */}
               <button
-                disabled={!selectedSlot}
                 onClick={handleProceedToPayment}
-                className="w-full py-4 rounded-2xl bg-[#FFD21F] hover:bg-[#E5B800] text-[#171717] font-extrabold text-sm shadow-md flex items-center justify-center gap-2 disabled:opacity-50 transition-all active:scale-98"
+                className="w-full py-4 rounded-2xl bg-[#FFD21F] hover:bg-[#E5B800] text-[#171717] font-extrabold text-sm shadow-md flex items-center justify-center gap-2 transition-all active:scale-98"
               >
                 <CreditCard className="w-4 h-4" />
                 CONTINUE TO PAYMENT

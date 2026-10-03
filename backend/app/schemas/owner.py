@@ -74,3 +74,21 @@ class OwnerLotSettingsUpdate(BaseModel):
 
 class NotificationMarkRead(BaseModel):
     notification_id: Optional[str] = None
+
+class OwnerDocumentSubmission(BaseModel):
+    commercial_license: str
+    property_deed_ref: str
+    gstin: Optional[str] = None
+    govt_id_type: Optional[str] = "Aadhaar / PAN"
+    govt_id_number: Optional[str] = None
+    contact_phone: Optional[str] = None
+    address: Optional[str] = None
+    additional_notes: Optional[str] = None
+
+class OwnerAppointmentScheduling(BaseModel):
+    appointment_date: str  # YYYY-MM-DD
+    appointment_time: str  # e.g. 10:00 AM - 12:00 PM
+    contact_person: Optional[str] = None
+    contact_phone: str
+    site_instructions: Optional[str] = None
+

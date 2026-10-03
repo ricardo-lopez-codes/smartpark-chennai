@@ -173,18 +173,25 @@ export default function OwnerLiveParking() {
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
             {filteredSlots.map((slot) => {
               const isSelected = selectedSlot?.id === slot.id;
+              const isBuffer = slot.is_buffer || (slot.slot_number && ['A19', 'A20', 'B19', 'B20'].includes(slot.slot_number));
               return (
                 <button
                   key={slot.id}
                   onClick={() => setSelectedSlot(slot)}
-                  className={`p-3.5 rounded-2xl border flex flex-col justify-between h-28 text-left transition-all cursor-pointer ${getSlotBadgeStyle(
-                    slot.status,
-                    isSelected
-                  )}`}
+                  className={`p-3.5 rounded-2xl border flex flex-col justify-between h-28 text-left transition-all cursor-pointer relative ${
+                    isBuffer ? 'ring-2 ring-amber-400/80 bg-amber-50/40' : ''
+                  } ${getSlotBadgeStyle(slot.status, isSelected)}`}
                 >
                   <div className="flex items-center justify-between w-full">
                     <span className="font-mono font-black text-sm tracking-tight">{slot.slot_number}</span>
-                    {getStatusDot(slot.status)}
+                    <div className="flex items-center gap-1">
+                      {isBuffer && (
+                        <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-amber-200 text-amber-900 border border-amber-300">
+                          BUFFER
+                        </span>
+                      )}
+                      {getStatusDot(slot.status)}
+                    </div>
                   </div>
 
                   <div className="space-y-0.5">
@@ -198,7 +205,7 @@ export default function OwnerLiveParking() {
 
                   <div className="flex items-center justify-between text-[10px] font-medium opacity-70 border-t border-current/10 pt-1">
                     <span>{slot.slot_type || 'Car'}</span>
-                    <span>{slot.zone || 'Zone A'}</span>
+                    <span>{isBuffer ? 'Protected Buffer' : (slot.zone || 'Zone A')}</span>
                   </div>
                 </button>
               );
