@@ -27,11 +27,15 @@ export default function OwnerLotSettings() {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
 
-  // Slot Configuration
-  const [totalSlots, setTotalSlots] = useState(20);
+  // Slot Configuration & Vehicle Types
+  const [totalSlots, setTotalSlots] = useState(25);
+  const [carSlots, setCarSlots] = useState(15);
+  const [bikeSlots, setBikeSlots] = useState(10);
+  const [carPrice, setCarPrice] = useState(40);
+  const [bikePrice, setBikePrice] = useState(20);
   const [slotPrefix, setSlotPrefix] = useState('A');
   const [slotStart, setSlotStart] = useState(1);
-  const [slotEnd, setSlotEnd] = useState(20);
+  const [slotEnd, setSlotEnd] = useState(25);
 
   // Operating Hours & Rules
   const [openingTime, setOpeningTime] = useState('06:00');
@@ -54,10 +58,14 @@ export default function OwnerLotSettings() {
         setPhone(res.data.phone || '');
         setEmail(res.data.email || '');
 
-        setTotalSlots(res.data.total_slots || 20);
+        setTotalSlots(res.data.total_slots || 25);
+        setCarSlots(res.data.car_slots ?? 15);
+        setBikeSlots(res.data.bike_slots ?? 10);
+        setCarPrice(res.data.car_price_per_hour ?? 40);
+        setBikePrice(res.data.bike_price_per_hour ?? 20);
         setSlotPrefix(res.data.slot_prefix || 'A');
         setSlotStart(res.data.slot_start || 1);
-        setSlotEnd(res.data.slot_end || 20);
+        setSlotEnd(res.data.slot_end || 25);
 
         setOpeningTime(res.data.opening_time || '06:00');
         setClosingTime(res.data.closing_time || '23:00');
@@ -85,14 +93,15 @@ export default function OwnerLotSettings() {
 
   // Compute live slot preview
   const computeSlotPreview = () => {
-    const prefix = (slotPrefix || 'A').toUpperCase().trim();
-    const start = Number(slotStart) || 1;
-    const end = Number(slotEnd) || (start + Number(totalSlots) - 1);
     const slots = [];
-    const count = Math.min(Math.max(end - start + 1, 0), 200);
+    const cCount = Math.min(Math.max(Number(carSlots) || 0, 0), 100);
+    const bCount = Math.min(Math.max(Number(bikeSlots) || 0, 0), 100);
 
-    for (let i = 0; i < count; i++) {
-      slots.push(`${prefix}${start + i}`);
+    for (let i = 1; i <= cCount; i++) {
+      slots.push(`A${i} (Car)`);
+    }
+    for (let i = 1; i <= bCount; i++) {
+      slots.push(`B${i} (Bike)`);
     }
     return slots;
   };
@@ -112,18 +121,16 @@ export default function OwnerLotSettings() {
       addNotification({ title: 'Validation Error', message: 'Company Name is required.', type: 'error' });
       return;
     }
-    if (Number(totalSlots) <= 0) {
-      addNotification({ title: 'Validation Error', message: 'Total slots must be greater than 0.', type: 'error' });
-      return;
-    }
-    if (Number(slotStart) > Number(slotEnd)) {
-      addNotification({ title: 'Validation Error', message: 'Slot start number cannot be greater than end number.', type: 'error' });
+    if (Number(carSlots) < 0 || Number(bikeSlots) < 0 || (Number(carSlots) + Number(bikeSlots)) === 0) {
+      addNotification({ title: 'Validation Error', message: 'Please specify at least 1 Car or Bike slot.', type: 'error' });
       return;
     }
     if (openingTime >= closingTime) {
       addNotification({ title: 'Validation Error', message: 'Closing time must be after opening time.', type: 'error' });
       return;
     }
+
+    const computedTotal = Number(carSlots) + Number(bikeSlots);
 
     setSaving(true);
     try {
@@ -133,13 +140,17 @@ export default function OwnerLotSettings() {
         contact_person: contactPerson.trim(),
         phone: phone.trim(),
         email: email.trim(),
-        total_slots: Number(totalSlots),
+        total_slots: computedTotal,
+        car_slots: Number(carSlots),
+        bike_slots: Number(bikeSlots),
+        car_price_per_hour: Number(carPrice),
+        bike_price_per_hour: Number(bikePrice),
         slot_prefix: (slotPrefix || 'A').toUpperCase().trim(),
         slot_start: Number(slotStart),
         slot_end: Number(slotEnd),
         opening_time: openingTime,
         closing_time: closingTime,
-        price_per_hour: Number(price),
+        price_per_hour: Number(carPrice),
         facilities: selectedFacilities,
         description: description.trim(),
         cancellation_policy: cancellationPolicy.trim()
@@ -255,92 +266,113 @@ export default function OwnerLotSettings() {
             </div>
           </div>
 
-          {/* Section B: Slot Details & Range Configurator */}
+          {/* Section B: Vehicle Slot Breakdown & Pricing Configurator */}
           <div className="p-6 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="font-extrabold text-base text-[#171717] flex items-center gap-2">
                 <Layers className="w-5 h-5 text-slate-700" />
-                Slot Range Configuration
+                Vehicle Slot & Hourly Rate Configuration
               </h3>
-              <span className="text-[10px] font-extrabold bg-[#171717] text-[#FFD21F] px-2.5 py-1 rounded-lg font-mono">
-                {(slotPrefix || 'A').toUpperCase()}{slotStart} – {(slotPrefix || 'A').toUpperCase()}{slotEnd}
+              <span className="text-[11px] font-extrabold bg-[#171717] text-[#FFD21F] px-3 py-1 rounded-lg font-mono">
+                Total Capacity: {Number(carSlots || 0) + Number(bikeSlots || 0)} Slots
               </span>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-medium">
-              <div>
-                <label className="block text-slate-700 font-bold mb-1">Total Slots</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="500"
-                  value={totalSlots}
-                  onChange={(e) => {
-                    const num = Number(e.target.value);
-                    setTotalSlots(num);
-                    setSlotEnd(Number(slotStart) + num - 1);
-                  }}
-                  className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[#171717] font-extrabold text-center"
-                />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* CAR PARKING CONFIG */}
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm font-extrabold text-slate-900">
+                    <span className="text-lg">🚗</span> Car Parking Space
+                  </div>
+                  <span className="px-2.5 py-0.5 rounded-md bg-blue-100 text-blue-900 font-extrabold text-[10px]">
+                    Zone A (A1..A{carSlots})
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <label className="text-slate-700 block font-bold mb-1">Car Slots Count</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="200"
+                      value={carSlots}
+                      onChange={(e) => setCarSlots(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-[#171717] font-extrabold text-center"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-700 block font-bold mb-1">Car Rate (₹/hr)</label>
+                    <input
+                      type="number"
+                      min="5"
+                      max="500"
+                      value={carPrice}
+                      onChange={(e) => setCarPrice(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-[#171717] font-extrabold text-center"
+                    />
+                  </div>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-slate-700 font-bold mb-1">Slot Prefix</label>
-                <input
-                  type="text"
-                  maxLength={3}
-                  value={slotPrefix}
-                  onChange={(e) => setSlotPrefix(e.target.value.toUpperCase())}
-                  className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[#171717] font-black text-center uppercase font-mono"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-700 font-bold mb-1">Start Num</label>
-                <input
-                  type="number"
-                  min="1"
-                  value={slotStart}
-                  onChange={(e) => {
-                    const start = Number(e.target.value);
-                    setSlotStart(start);
-                    setSlotEnd(start + Number(totalSlots) - 1);
-                  }}
-                  className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[#171717] font-black text-center font-mono"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-700 font-bold mb-1">End Num</label>
-                <input
-                  type="number"
-                  value={slotEnd}
-                  onChange={(e) => {
-                    const end = Number(e.target.value);
-                    setSlotEnd(end);
-                    if (end >= slotStart) {
-                      setTotalSlots(end - slotStart + 1);
-                    }
-                  }}
-                  className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[#171717] font-black text-center font-mono"
-                />
+              {/* BIKE PARKING CONFIG */}
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm font-extrabold text-slate-900">
+                    <span className="text-lg">🏍️</span> Two Wheeler / Bike Space
+                  </div>
+                  <span className="px-2.5 py-0.5 rounded-md bg-emerald-100 text-emerald-900 font-extrabold text-[10px]">
+                    Zone B (B1..B{bikeSlots})
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <label className="text-slate-700 block font-bold mb-1">Bike Slots Count</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="200"
+                      value={bikeSlots}
+                      onChange={(e) => setBikeSlots(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-[#171717] font-extrabold text-center"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-700 block font-bold mb-1">Bike Rate (₹/hr)</label>
+                    <input
+                      type="number"
+                      min="5"
+                      max="500"
+                      value={bikePrice}
+                      onChange={(e) => setBikePrice(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-[#171717] font-extrabold text-center"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
             {/* Generated Slots Array Preview */}
             <div className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200 space-y-2">
               <span className="text-[10px] uppercase font-extrabold text-amber-950 tracking-wider block">
-                Generated Slot Range Preview ({slotPreview.length} slots):
+                Generated Slot Breakdown Preview ({slotPreview.length} slots):
               </span>
               <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto custom-scrollbar p-2 bg-white rounded-xl border border-amber-200 font-mono text-[11px]">
                 {slotPreview.length > 0 ? (
-                  slotPreview.map(slotNum => (
-                    <span key={slotNum} className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-950 font-black text-[10px] border border-amber-300">
-                      {slotNum}
+                  slotPreview.map((slotLabel, idx) => (
+                    <span
+                      key={idx}
+                      className={`px-2 py-0.5 rounded-md font-black text-[10px] border ${
+                        slotLabel.includes('Car')
+                          ? 'bg-blue-50 text-blue-900 border-blue-200'
+                          : 'bg-emerald-50 text-emerald-900 border-emerald-200'
+                      }`}
+                    >
+                      {slotLabel}
                     </span>
                   ))
                 ) : (
-                  <span className="text-slate-400 italic text-[10px]">Invalid slot range</span>
+                  <span className="text-slate-400 italic text-[10px]">No slots configured</span>
                 )}
               </div>
             </div>

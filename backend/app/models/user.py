@@ -11,6 +11,7 @@ class User(Base):
     phone = Column(String, nullable=True)
     password_hash = Column(String, nullable=False)
     vehicle_number = Column(String, nullable=True, default="TN-09-AB-1234")
+    vehicle_type = Column(String, default="CAR", nullable=False)  # CAR or BIKE
     role = Column(String, default="civilian")  # civilian, owner, government
     wallet_balance = Column(Float, default=0.0, nullable=False)
     wallet_credits = Column(Integer, default=0, nullable=False)

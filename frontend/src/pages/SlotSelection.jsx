@@ -3,13 +3,16 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, CreditCard, Calendar, Clock, MapPin, ShieldCheck, ChevronRight } from 'lucide-react';
 import api from '../services/api';
 import { useBooking } from '../context/BookingContext';
+import { useAuth } from '../context/AuthContext';
 import SlotGrid from '../components/SlotGrid';
-import { formatCurrency } from '../utils/formatters';
+import { formatCurrency, getLocalDateISO } from '../utils/formatters';
 
 export default function SlotSelection() {
   const [searchParams] = useSearchParams();
   const lotId = searchParams.get('lot_id');
-  const dateStr = searchParams.get('date') || new Date().toISOString().split('T')[0];
+  const todayISO = getLocalDateISO();
+  const rawDate = searchParams.get('date');
+  const dateStr = (!rawDate || rawDate < todayISO) ? todayISO : rawDate;
   const timeStr = searchParams.get('time') || '10:00';
   const duration = parseInt(searchParams.get('duration') || '2', 10);
 
@@ -18,6 +21,7 @@ export default function SlotSelection() {
   const [slots, setSlots] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const { user } = useAuth();
   const {
     selectedSlot, setSelectedSlot,
     setSelectedDate, setSelectedTime, setSelectedDuration
@@ -94,7 +98,10 @@ export default function SlotSelection() {
   };
 
   const { paidEnd, bufferEnd } = getEndTimes();
-  const parkingFee = lot ? lot.price_per_hour * duration : 0;
+  const hourlyRate = user?.vehicle_type === 'BIKE'
+    ? (lot?.bike_price_per_hour || 20.0)
+    : (lot?.car_price_per_hour || lot?.price_per_hour || 40.0);
+  const parkingFee = lot ? hourlyRate * duration : 0;
   const serviceFee = 10;
   const totalAmount = parkingFee + serviceFee;
 
@@ -150,12 +157,12 @@ export default function SlotSelection() {
                   </div>
                   <div>
                     <h3 className="font-extrabold text-[#171717] text-base">Dynamic Physical Position Assignment</h3>
-                    <p className="text-xs text-slate-600 font-medium">No need to manually pick A1, A2, or A3!</p>
+                    <p className="text-xs text-slate-600 font-medium">No slot selection required during booking!</p>
                   </div>
                 </div>
 
                 <p className="text-xs text-slate-700 leading-relaxed font-medium bg-white/70 p-3 rounded-xl border border-amber-100">
-                  <strong className="text-amber-900 font-bold">How it works:</strong> You are reserving parking capacity and time at <strong>{lot?.name}</strong>. Your exact physical parking position (e.g. Ground Floor - Slot A5) will be automatically and dynamically assigned by our smart sensor system when your vehicle enters the lot upon arrival.
+                  <strong className="text-amber-900 font-bold">How it works:</strong> You are reserving parking capacity and time at <strong>{lot?.name}</strong>. Your physical parking position will be automatically assigned by our smart sensor system when your vehicle enters the lot upon arrival.
                 </p>
               </div>
 
@@ -214,7 +221,7 @@ export default function SlotSelection() {
 
                 <div className="pt-3 border-t border-slate-100 space-y-1.5">
                   <div className="flex justify-between">
-                    <span className="text-slate-500">Parking Fee:</span>
+                    <span className="text-slate-500">Parking Fee ({duration} hrs @ {formatCurrency(hourlyRate)}/hr):</span>
                     <span className="font-bold text-slate-900">{formatCurrency(parkingFee)}</span>
                   </div>
                   <div className="flex justify-between pt-2 border-t border-slate-200 text-sm font-extrabold text-[#171717]">

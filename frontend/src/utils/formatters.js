@@ -73,3 +73,11 @@ export const getGreeting = () => {
   if (hour < 17) return 'Good Afternoon';
   return 'Good Evening';
 };
+
+export const getLocalDateISO = (d = new Date()) => {
+  const dateObj = (d instanceof Date && !isNaN(d.getTime())) ? d : new Date(d);
+  const y = dateObj.getFullYear();
+  const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};

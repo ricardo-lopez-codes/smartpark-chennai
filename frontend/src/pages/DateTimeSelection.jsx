@@ -3,7 +3,8 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Calendar, Clock, ArrowLeft, Plus, Minus, CheckCircle, AlertTriangle, MapPin, ChevronRight } from 'lucide-react';
 import api from '../services/api';
 import { useBooking } from '../context/BookingContext';
-import { formatCurrency } from '../utils/formatters';
+import { useAuth } from '../context/AuthContext';
+import { formatCurrency, getLocalDateISO } from '../utils/formatters';
 
 export default function DateTimeSelection() {
   const [searchParams] = useSearchParams();
@@ -12,6 +13,7 @@ export default function DateTimeSelection() {
   const [lot, setLot] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const { user } = useAuth();
   const {
     selectedDate, setSelectedDate,
     selectedTime, setSelectedTime,
@@ -20,6 +22,13 @@ export default function DateTimeSelection() {
   } = useBooking();
 
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const todayISO = getLocalDateISO();
+    if (!selectedDate || selectedDate < todayISO) {
+      setSelectedDate(todayISO);
+    }
+  }, [selectedDate, setSelectedDate]);
 
   useEffect(() => {
     const fetchLot = async () => {
@@ -44,7 +53,7 @@ export default function DateTimeSelection() {
     for (let i = 0; i < 4; i++) {
       const d = new Date(today);
       d.setDate(today.getDate() + i);
-      const isoStr = d.toISOString().split('T')[0];
+      const isoStr = getLocalDateISO(d);
       
       let label = '';
       if (i === 0) label = 'TODAY';
@@ -63,13 +72,13 @@ export default function DateTimeSelection() {
   };
 
   const dateChips = generateDateChips();
-  const todayISO = new Date().toISOString().split('T')[0];
+  const todayISO = getLocalDateISO();
 
   // Helper to calculate max allowed date (30 days in advance)
   const getMaxDateISO = () => {
     const d = new Date();
     d.setDate(d.getDate() + 30);
-    return d.toISOString().split('T')[0];
+    return getLocalDateISO(d);
   };
 
   // Generate Time Chips dynamically based on lot operating hours
@@ -184,7 +193,10 @@ export default function DateTimeSelection() {
   };
 
   const { paidEnd, bufferEnd } = getEndTimesDisplay();
-  const parkingFee = lot ? lot.price_per_hour * selectedDuration : 0;
+  const hourlyRate = user?.vehicle_type === 'BIKE'
+    ? (lot?.bike_price_per_hour || 20.0)
+    : (lot?.car_price_per_hour || lot?.price_per_hour || 40.0);
+  const parkingFee = lot ? hourlyRate * selectedDuration : 0;
   const serviceFee = 10;
   const totalAmount = parkingFee + serviceFee;
 
@@ -377,7 +389,7 @@ export default function DateTimeSelection() {
 
                 <div className="pt-3 border-t border-slate-100 space-y-1.5">
                   <div className="flex justify-between text-xs">
-                    <span className="text-slate-500">Parking Fee ({selectedDuration} hrs @ {formatCurrency(lot?.price_per_hour)}/hr):</span>
+                    <span className="text-slate-500">Parking Fee ({selectedDuration} hrs @ {formatCurrency(hourlyRate)}/hr):</span>
                     <span className="font-bold text-slate-900">{formatCurrency(parkingFee)}</span>
                   </div>
                   <div className="flex justify-between text-xs">

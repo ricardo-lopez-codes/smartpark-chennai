@@ -89,27 +89,50 @@ export default function ParkingLocations() {
                   </p>
                 </div>
 
-                <div className="text-right">
-                  <span className="text-2xl font-extrabold text-slate-900">
-                    {formatCurrency(lot.price_per_hour)}
-                  </span>
-                  <span className="text-xs text-slate-500 block font-medium">/ hour</span>
+                <div className="text-right flex flex-col items-end gap-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs bg-amber-50 text-amber-900 font-extrabold px-2 py-0.5 rounded-lg border border-amber-200">
+                      🚗 ₹{lot.car_price_per_hour || lot.price_per_hour}/hr
+                    </span>
+                    <span className="text-xs bg-blue-50 text-blue-900 font-extrabold px-2 py-0.5 rounded-lg border border-blue-200">
+                      🏍️ ₹{lot.bike_price_per_hour || 20}/hr
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-slate-500 font-medium">Hourly Rates</span>
                 </div>
               </div>
 
-              {/* Slot Availability Banner */}
-              <div className="grid grid-cols-3 gap-3 p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs">
-                <div>
-                  <span className="text-slate-500 block font-medium">Total Slots</span>
-                  <span className="font-extrabold text-[#171717] text-sm">{lot.total_slots}</span>
+              {/* Slot Availability & Vehicle Capacity Banner */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs">
+                <div className="p-2.5 bg-white rounded-xl border border-slate-200 shadow-2xs">
+                  <span className="text-slate-500 block font-medium text-[11px] mb-0.5">🚗 Car Slots</span>
+                  <span className="font-black text-[#171717] text-sm block">
+                    {lot.car_slots || 15} <span className="text-xs text-slate-500 font-normal">Slots</span>
+                  </span>
+                  <span className="text-[10px] font-bold text-amber-800">
+                    ₹{lot.car_price_per_hour || lot.price_per_hour}/hr
+                  </span>
                 </div>
-                <div>
-                  <span className="text-slate-500 block font-medium">Available</span>
-                  <span className="font-extrabold text-emerald-700 text-sm">{lot.available_slots} Slots</span>
+
+                <div className="p-2.5 bg-white rounded-xl border border-slate-200 shadow-2xs">
+                  <span className="text-slate-500 block font-medium text-[11px] mb-0.5">🏍️ Bike Slots</span>
+                  <span className="font-black text-[#171717] text-sm block">
+                    {lot.bike_slots || 10} <span className="text-xs text-slate-500 font-normal">Slots</span>
+                  </span>
+                  <span className="text-[10px] font-bold text-blue-800">
+                    ₹{lot.bike_price_per_hour || 20}/hr
+                  </span>
                 </div>
-                <div>
-                  <span className="text-slate-500 block font-medium">Operating Hours</span>
-                  <span className="font-bold text-slate-800 text-xs">
+
+                <div className="p-2.5 bg-white rounded-xl border border-slate-200 shadow-2xs">
+                  <span className="text-slate-500 block font-medium text-[11px] mb-0.5">Available Slots</span>
+                  <span className="font-black text-emerald-700 text-sm block">{lot.available_slots} Slots</span>
+                  <span className="text-[10px] text-slate-500 font-medium">Total Capacity: {lot.total_slots || ((lot.car_slots || 15) + (lot.bike_slots || 10))}</span>
+                </div>
+
+                <div className="p-2.5 bg-white rounded-xl border border-slate-200 shadow-2xs">
+                  <span className="text-slate-500 block font-medium text-[11px] mb-0.5">Operating Hours</span>
+                  <span className="font-bold text-slate-800 text-xs block mt-0.5">
                     {format12Hour(lot.opening_time)} – {format12Hour(lot.closing_time)}
                   </span>
                 </div>

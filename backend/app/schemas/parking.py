@@ -17,6 +17,8 @@ class SlotResponse(BaseModel):
     parking_lot_id: int
     slot_number: str
     status: str
+    slot_type: Optional[str] = "Car"
+    price_per_hour: Optional[float] = None
     sensor_id: Optional[str] = None
     sensor: Optional[SensorResponse] = None
 
@@ -31,6 +33,10 @@ class LotResponse(BaseModel):
     latitude: float
     longitude: float
     total_slots: int
+    car_slots: int = 15
+    bike_slots: int = 10
+    car_price_per_hour: float = 40.0
+    bike_price_per_hour: float = 20.0
     available_slots: int
     occupied_slots: int
     reserved_slots: int

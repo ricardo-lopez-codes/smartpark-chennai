@@ -12,7 +12,8 @@ from app.schemas.user import (
     Token,
     ProfileUpdate,
     ForgotPasswordRequest,
-    PasswordResetConfirm
+    PasswordResetConfirm,
+    WalletRechargeRequest
 )
 from app.services.auth import get_password_hash, verify_password, create_access_token, get_current_user
 
@@ -33,6 +34,7 @@ def register_civilian(user_in: UserCreate, db: Session = Depends(get_db)):
         phone=user_in.phone,
         password_hash=get_password_hash(user_in.password),
         vehicle_number=user_in.vehicle_number or "TN-09-AB-1234",
+        vehicle_type=user_in.vehicle_type or "CAR",
         role="civilian"
     )
     db.add(user)
@@ -98,42 +100,77 @@ def register_owner(owner_in: OwnerRegisterCreate, db: Session = Depends(get_db))
         db.commit()
         db.refresh(area)
 
-    # 3. Create ParkingLot owned by user
+    car_slots = owner_in.car_slots if owner_in.car_slots is not None else 15
+    bike_slots = owner_in.bike_slots if owner_in.bike_slots is not None else 10
+    car_price = owner_in.car_price_per_hour if owner_in.car_price_per_hour is not None else (owner_in.price_per_hour or 40.0)
+    bike_price = owner_in.bike_price_per_hour if owner_in.bike_price_per_hour is not None else 20.0
+    tot_slots = car_slots + bike_slots
+
+    # 3. Create ParkingLot owned by user (Approved and Live immediately)
     lot = ParkingLot(
         area_id=area.id,
         name=owner_in.company_name,
         address=owner_in.address or f"{area.name}, South Chennai",
         latitude=13.0850,
         longitude=80.2101,
-        total_slots=owner_in.number_of_slots,
-        price_per_hour=owner_in.price_per_hour or 40.0,
+        total_slots=tot_slots,
+        car_slots=car_slots,
+        bike_slots=bike_slots,
+        car_price_per_hour=car_price,
+        bike_price_per_hour=bike_price,
+        price_per_hour=car_price,
         parking_type="Owner Commercial Space",
         opening_time=owner_in.opening_time or "06:00",
         closing_time=owner_in.closing_time or "23:00",
-        slot_prefix=owner_in.slot_prefix or "A",
-        slot_start_num=owner_in.slot_start_num or 1,
-        slot_end_num=owner_in.slot_end_num or owner_in.number_of_slots,
+        slot_prefix="A",
+        slot_start_num=1,
+        slot_end_num=tot_slots,
         owner_id=user.id,
         phone=owner_in.phone,
-        email=owner_in.email
+        email=owner_in.email,
+        verification_status="APPROVED",
+        is_live=True
     )
     db.add(lot)
     db.commit()
     db.refresh(lot)
 
-    # 4. Generate Slot Range (e.g. A1 to A20)
-    prefix = owner_in.slot_prefix or "A"
-    start_num = owner_in.slot_start_num or 1
-    end_num = owner_in.slot_end_num or (start_num + owner_in.number_of_slots - 1)
-
-    for i in range(start_num, end_num + 1):
-        slot_num = f"{prefix}{i}"
+    # 4. Generate Car Slots (A1..A{car_slots}) & Bike Slots (B1..B{bike_slots})
+    # Car Slots
+    for i in range(1, car_slots + 1):
+        slot_num = f"A{i}"
         slot = ParkingSlot(
             parking_lot_id=lot.id,
             slot_number=slot_num,
             status="available",
-            zone=f"Zone {prefix}",
-            price_per_hour=owner_in.price_per_hour or 40.0,
+            slot_type="Car",
+            zone="Zone A",
+            price_per_hour=car_price,
+            sensor_id=f"ESP32-MAG-{lot.id:02d}-{slot_num}"
+        )
+        db.add(slot)
+        db.commit()
+        db.refresh(slot)
+
+        # Attach IoT sensor
+        sensor = Sensor(
+            slot_id=slot.id,
+            device_id=slot.sensor_id,
+            magnetic_value=15.2,
+            vehicle_detected=False
+        )
+        db.add(sensor)
+
+    # Bike Slots
+    for i in range(1, bike_slots + 1):
+        slot_num = f"B{i}"
+        slot = ParkingSlot(
+            parking_lot_id=lot.id,
+            slot_number=slot_num,
+            status="available",
+            slot_type="Bike",
+            zone="Zone B",
+            price_per_hour=bike_price,
             sensor_id=f"ESP32-MAG-{lot.id:02d}-{slot_num}"
         )
         db.add(slot)
@@ -213,7 +250,26 @@ def update_profile(profile_in: ProfileUpdate, current_user: User = Depends(get_c
         current_user.phone = profile_in.phone
     if profile_in.vehicle_number is not None:
         current_user.vehicle_number = profile_in.vehicle_number
+    if profile_in.vehicle_type is not None:
+        current_user.vehicle_type = profile_in.vehicle_type
 
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+@router.post("/wallet/buy-credits", response_model=UserResponse)
+@router.post("/wallet/topup", response_model=UserResponse)
+def buy_credits(
+    req: WalletRechargeRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    amount = float(req.amount)
+    credits_to_add = int(amount)  # 1 Rupee = 1 Credit
+    
+    current_user.wallet_balance = round((current_user.wallet_balance or 0.0) + amount, 2)
+    current_user.wallet_credits = (current_user.wallet_credits or 0) + credits_to_add
+    
     db.commit()
     db.refresh(current_user)
     return current_user

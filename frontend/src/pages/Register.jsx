@@ -20,13 +20,15 @@ export default function Register() {
   // Owner Form State
   const [companyName, setCompanyName] = useState('');
   const [personName, setPersonName] = useState('');
-  const [numberOfSlots, setNumberOfSlots] = useState(20);
+  const [carSlots, setCarSlots] = useState(15);
+  const [bikeSlots, setBikeSlots] = useState(10);
+  const [carPricePerHour, setCarPricePerHour] = useState(40);
+  const [bikePricePerHour, setBikePricePerHour] = useState(20);
   const [slotPrefix, setSlotPrefix] = useState('A');
   const [slotStartNum, setSlotStartNum] = useState(1);
-  const [slotEndNum, setSlotEndNum] = useState(20);
+  const [slotEndNum, setSlotEndNum] = useState(25);
   const [openingTime, setOpeningTime] = useState('06:00');
   const [closingTime, setClosingTime] = useState('23:00');
-  const [pricePerHour, setPricePerHour] = useState(40);
   const [areaName, setAreaName] = useState('Anna Nagar');
   const [address, setAddress] = useState('');
   const [ownerPhone, setOwnerPhone] = useState('');
@@ -39,16 +41,17 @@ export default function Register() {
   const { addNotification } = useNotification();
   const navigate = useNavigate();
 
-  // Helper to generate live slot preview array (e.g. A1, A2, A3 ... A20)
+  // Helper to generate live slot preview array (e.g. A1..A15 for Cars, B1..B10 for Bikes)
   const generateSlotPreview = () => {
-    const prefix = (slotPrefix || 'A').toUpperCase().trim();
-    const start = Number(slotStartNum) || 1;
-    const end = Number(slotEndNum) || (start + Number(numberOfSlots) - 1);
     const slots = [];
-    const count = Math.min(Math.max(end - start + 1, 0), 200);
+    const cCount = Math.min(Math.max(Number(carSlots) || 0, 0), 100);
+    const bCount = Math.min(Math.max(Number(bikeSlots) || 0, 0), 100);
 
-    for (let i = 0; i < count; i++) {
-      slots.push(`${prefix}${start + i}`);
+    for (let i = 1; i <= cCount; i++) {
+      slots.push(`A${i} (Car)`);
+    }
+    for (let i = 1; i <= bCount; i++) {
+      slots.push(`B${i} (Bike)`);
     }
     return slots;
   };
@@ -78,13 +81,16 @@ export default function Register() {
       return;
     }
 
+    const formattedVehicleType = (vehicleType === 'Two Wheeler' || vehicleType === 'Bike') ? 'BIKE' : 'CAR';
+
     setLoading(true);
     const res = await registerCivilian(
       civilianName.trim(),
       civilianEmail.trim(),
       civilianPhone.trim(),
       civilianPassword,
-      vehicleNumber.trim() || 'TN-09-AB-1234'
+      vehicleNumber.trim() || 'TN-09-AB-1234',
+      formattedVehicleType
     );
     setLoading(false);
 
@@ -108,12 +114,8 @@ export default function Register() {
       addNotification({ title: 'Validation Error', message: "Person's Name is required.", type: 'error' });
       return;
     }
-    if (Number(numberOfSlots) <= 0) {
-      addNotification({ title: 'Validation Error', message: 'Number of slots must be greater than 0.', type: 'error' });
-      return;
-    }
-    if (Number(slotStartNum) > Number(slotEndNum)) {
-      addNotification({ title: 'Validation Error', message: 'Slot start number cannot be greater than end number.', type: 'error' });
+    if (Number(carSlots) < 0 || Number(bikeSlots) < 0 || (Number(carSlots) + Number(bikeSlots)) === 0) {
+      addNotification({ title: 'Validation Error', message: 'Please specify at least 1 Car or Bike slot.', type: 'error' });
       return;
     }
     if (!openingTime || !closingTime) {
@@ -141,14 +143,20 @@ export default function Register() {
       return;
     }
 
+    const totalSlots = Number(carSlots) + Number(bikeSlots);
+
     setLoading(true);
     const res = await registerOwner({
       company_name: companyName.trim(),
       person_name: personName.trim(),
-      number_of_slots: Number(numberOfSlots),
-      slot_prefix: (slotPrefix || 'A').toUpperCase().trim(),
-      slot_start_num: Number(slotStartNum),
-      slot_end_num: Number(slotEndNum),
+      number_of_slots: totalSlots,
+      car_slots: Number(carSlots),
+      bike_slots: Number(bikeSlots),
+      car_price_per_hour: Number(carPricePerHour) || 40.0,
+      bike_price_per_hour: Number(bikePricePerHour) || 20.0,
+      slot_prefix: 'A',
+      slot_start_num: 1,
+      slot_end_num: totalSlots,
       opening_time: openingTime,
       closing_time: closingTime,
       phone: ownerPhone.trim(),
@@ -156,14 +164,14 @@ export default function Register() {
       password: ownerPassword,
       address: address.trim() || `${companyName}, ${areaName}, South Chennai`,
       area_name: areaName,
-      price_per_hour: Number(pricePerHour) || 40.0
+      price_per_hour: Number(carPricePerHour) || 40.0
     });
     setLoading(false);
 
     if (res.success) {
       addNotification({
         title: 'Space Owner Registered',
-        message: `Welcome ${personName}! Your parking lot '${companyName}' is now live.`,
+        message: `Welcome ${personName}! Your facility '${companyName}' is now live on civilian dashboards!`,
         type: 'success'
       });
       navigate('/owner');
@@ -430,96 +438,110 @@ export default function Register() {
               </div>
             </div>
 
-            {/* SLOT RANGE CONFIGURATOR BOX */}
-            <div className="p-4 sm:p-5 rounded-2xl bg-amber-50/70 border border-amber-300 space-y-3 shadow-xs">
-              <div className="flex items-center justify-between">
+            {/* VEHICLE TYPE SLOTS & PRICING CONFIGURATOR */}
+            <div className="p-4 sm:p-5 rounded-2xl bg-amber-50/70 border border-amber-300 space-y-4 shadow-xs">
+              <div className="flex items-center justify-between border-b border-amber-200/80 pb-2">
                 <span className="font-extrabold text-amber-950 text-xs flex items-center gap-1.5">
                   <CheckCircle2 className="w-4 h-4 text-amber-700" />
-                  Slot Range Configurator
+                  Vehicle Slot & Pricing Configurator
                 </span>
-                <span className="text-[10px] font-extrabold bg-[#171717] text-[#FFD21F] px-2.5 py-0.5 rounded-md font-mono">
-                  {slotPrefix.toUpperCase() || 'A'}{slotStartNum} – {slotPrefix.toUpperCase() || 'A'}{slotEndNum}
+                <span className="text-[11px] font-extrabold bg-[#171717] text-[#FFD21F] px-2.5 py-1 rounded-lg font-mono">
+                  Total Slots: {Number(carSlots || 0) + Number(bikeSlots || 0)}
                 </span>
               </div>
 
-              <div className="grid grid-cols-4 gap-2 text-xs">
-                <div>
-                  <label className="text-slate-700 block text-[10px] font-bold mb-1">Number of Slots</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="500"
-                    value={numberOfSlots}
-                    onChange={(e) => {
-                      const count = Number(e.target.value);
-                      setNumberOfSlots(count);
-                      setSlotEndNum(Number(slotStartNum) + count - 1);
-                    }}
-                    className="w-full px-2.5 py-2.5 rounded-xl bg-white border border-amber-300 text-[#171717] font-extrabold text-center"
-                  />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* CAR PARKING CONFIG */}
+                <div className="p-3 bg-white rounded-xl border border-amber-200 space-y-2">
+                  <div className="flex items-center gap-1.5 text-xs font-black text-slate-900">
+                    <span className="text-base">🚗</span> Car Parking
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <label className="text-slate-600 block text-[10px] font-bold mb-1">Car Slots</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="200"
+                        value={carSlots}
+                        onChange={(e) => setCarSlots(e.target.value)}
+                        className="w-full px-2.5 py-2 rounded-lg bg-slate-50 border border-slate-200 text-[#171717] font-extrabold text-center"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-slate-600 block text-[10px] font-bold mb-1">Rate (₹/hr)</label>
+                      <input
+                        type="number"
+                        min="5"
+                        max="500"
+                        value={carPricePerHour}
+                        onChange={(e) => setCarPricePerHour(e.target.value)}
+                        className="w-full px-2.5 py-2 rounded-lg bg-slate-50 border border-slate-200 text-[#171717] font-extrabold text-center"
+                      />
+                    </div>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="text-slate-700 block text-[10px] font-bold mb-1">Slot Prefix</label>
-                  <input
-                    type="text"
-                    maxLength="3"
-                    value={slotPrefix}
-                    onChange={(e) => setSlotPrefix(e.target.value)}
-                    className="w-full px-2.5 py-2.5 rounded-xl bg-white border border-amber-300 text-[#171717] font-black text-center uppercase font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-slate-700 block text-[10px] font-bold mb-1">Start Num</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={slotStartNum}
-                    onChange={(e) => {
-                      const start = Number(e.target.value);
-                      setSlotStartNum(start);
-                      setSlotEndNum(start + Number(numberOfSlots) - 1);
-                    }}
-                    className="w-full px-2.5 py-2.5 rounded-xl bg-white border border-amber-300 text-[#171717] font-black text-center font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-slate-700 block text-[10px] font-bold mb-1">End Num</label>
-                  <input
-                    type="number"
-                    value={slotEndNum}
-                    onChange={(e) => setSlotEndNum(Number(e.target.value))}
-                    className="w-full px-2.5 py-2.5 rounded-xl bg-white border border-amber-300 text-[#171717] font-black text-center font-mono"
-                  />
+                {/* BIKE PARKING CONFIG */}
+                <div className="p-3 bg-white rounded-xl border border-amber-200 space-y-2">
+                  <div className="flex items-center gap-1.5 text-xs font-black text-slate-900">
+                    <span className="text-base">🏍️</span> Two Wheeler / Bike Parking
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <label className="text-slate-600 block text-[10px] font-bold mb-1">Bike Slots</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="200"
+                        value={bikeSlots}
+                        onChange={(e) => setBikeSlots(e.target.value)}
+                        className="w-full px-2.5 py-2 rounded-lg bg-slate-50 border border-slate-200 text-[#171717] font-extrabold text-center"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-slate-600 block text-[10px] font-bold mb-1">Rate (₹/hr)</label>
+                      <input
+                        type="number"
+                        min="5"
+                        max="500"
+                        value={bikePricePerHour}
+                        onChange={(e) => setBikePricePerHour(e.target.value)}
+                        className="w-full px-2.5 py-2 rounded-lg bg-slate-50 border border-slate-200 text-[#171717] font-extrabold text-center"
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
 
               {/* LIVE GENERATED SLOTS PREVIEW */}
               <div className="pt-2 border-t border-amber-200/80 space-y-1.5">
                 <span className="text-[10px] uppercase font-extrabold text-amber-900 tracking-wider block">
-                  Generated Slots Preview:
+                  Generated Slots Preview ({generateSlotPreview().length} slots):
                 </span>
                 <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto custom-scrollbar p-2 bg-white rounded-xl border border-amber-200 font-mono text-[11px]">
-                  {slotPreviewList.length > 0 ? (
-                    slotPreviewList.map((slotNum) => (
+                  {generateSlotPreview().length > 0 ? (
+                    generateSlotPreview().map((slotLabel, idx) => (
                       <span
-                        key={slotNum}
-                        className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-950 font-black text-[10px] border border-amber-300"
+                        key={idx}
+                        className={`px-2 py-0.5 rounded-md font-black text-[10px] border ${
+                          slotLabel.includes('Car')
+                            ? 'bg-blue-50 text-blue-900 border-blue-200'
+                            : 'bg-emerald-50 text-emerald-900 border-emerald-200'
+                        }`}
                       >
-                        {slotNum}
+                        {slotLabel}
                       </span>
                     ))
                   ) : (
-                    <span className="text-slate-400 italic text-[10px]">Invalid slot range numbers</span>
+                    <span className="text-slate-400 italic text-[10px]">No slots specified</span>
                   )}
                 </div>
               </div>
             </div>
 
-            {/* OPERATING HOURS & PRICE */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* OPERATING HOURS */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="text-slate-700 font-bold block mb-1">Opening Time *</label>
                 <input
@@ -539,18 +561,6 @@ export default function Register() {
                   value={closingTime}
                   onChange={(e) => setClosingTime(e.target.value)}
                   className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[#171717] font-mono font-bold focus:outline-none focus:border-slate-900"
-                />
-              </div>
-
-              <div>
-                <label className="text-slate-700 font-bold block mb-1">Price / Hour (₹)</label>
-                <input
-                  type="number"
-                  min="10"
-                  max="500"
-                  value={pricePerHour}
-                  onChange={(e) => setPricePerHour(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[#171717] font-bold focus:outline-none focus:border-slate-900"
                 />
               </div>
             </div>

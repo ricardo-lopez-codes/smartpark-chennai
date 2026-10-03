@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Search, MapPin, Navigation, Clock, ChevronRight, Car, ArrowRight, Zap, Calendar } from 'lucide-react';
+import { Search, MapPin, Navigation, Clock, ChevronRight, Car, ArrowRight, Zap, Calendar, Plus, Wallet } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useBooking } from '../context/BookingContext';
 import api from '../services/api';
-import { getGreeting, formatTime } from '../utils/formatters';
+import { getGreeting, formatTime, formatCurrency } from '../utils/formatters';
+import BuyCreditsModal from '../components/BuyCreditsModal';
 
 export default function Home() {
   const { user } = useAuth();
   const { activeBooking, loadingActive, setSelectedArea } = useBooking();
   const [areas, setAreas] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isBuyCreditsOpen, setIsBuyCreditsOpen] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -121,8 +123,8 @@ export default function Home() {
           <div className="p-6 rounded-3xl bg-white border border-slate-200 shadow-md space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-100">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-700 font-extrabold text-sm">
-                  {activeBooking.slot_number}
+                <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-700 font-extrabold text-lg">
+                  🅿️
                 </div>
                 <div>
                   <h3 className="font-extrabold text-lg text-[#171717]">{activeBooking.parking_lot_name}</h3>
@@ -152,8 +154,8 @@ export default function Home() {
                 <span className="font-bold text-slate-800">{formatTime(activeBooking.start_time)} – {formatTime(activeBooking.paid_end_time)}</span>
               </div>
               <div>
-                <span className="text-slate-500 font-medium block">Slot</span>
-                <span className="font-extrabold text-[#171717] text-sm">{activeBooking.slot_number}</span>
+                <span className="text-slate-500 font-medium block">Physical Position</span>
+                <span className="font-extrabold text-[#171717] text-xs">{activeBooking.assigned_position_name || "Assigned on arrival"}</span>
               </div>
               <div>
                 <span className="text-slate-500 font-medium block">Booking ID</span>
@@ -170,11 +172,18 @@ export default function Home() {
                 View Booking
               </button>
 
+              <button
+                onClick={() => navigate(`/view-booking/${activeBooking.id}?cancel=true`)}
+                className="py-3 px-4 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-800 font-extrabold text-xs flex items-center justify-center gap-1.5 border border-rose-200 transition-all shadow-xs"
+              >
+                Cancel Booking
+              </button>
+
               <a
                 href={`https://www.google.com/maps/dir/?api=1&destination=${activeBooking.latitude},${activeBooking.longitude}`}
                 target="_blank"
                 rel="noreferrer"
-                className="py-3 px-5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs flex items-center justify-center gap-1.5 border border-slate-200 transition-all"
+                className="py-3 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs flex items-center justify-center gap-1.5 border border-slate-200 transition-all"
               >
                 <Navigation className="w-4 h-4 text-blue-600" />
                 Open Directions
@@ -224,6 +233,12 @@ export default function Home() {
           ))}
         </div>
       </div>
+
+      {/* BUY CREDITS MODAL */}
+      <BuyCreditsModal
+        isOpen={isBuyCreditsOpen}
+        onClose={() => setIsBuyCreditsOpen(false)}
+      />
     </div>
   );
 }

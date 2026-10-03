@@ -7,6 +7,7 @@ class UserBase(BaseModel):
     email: EmailStr
     phone: Optional[str] = None
     vehicle_number: Optional[str] = "TN-09-AB-1234"
+    vehicle_type: Optional[str] = "CAR"
     role: Optional[str] = "civilian"
     wallet_balance: float = 0.0
     wallet_credits: int = 0
@@ -18,6 +19,10 @@ class OwnerRegisterCreate(BaseModel):
     company_name: str
     person_name: str
     number_of_slots: int = Field(20, ge=1, le=500)
+    car_slots: Optional[int] = 15
+    bike_slots: Optional[int] = 10
+    car_price_per_hour: Optional[float] = 40.0
+    bike_price_per_hour: Optional[float] = 20.0
     slot_prefix: str = "A"
     slot_start_num: int = 1
     slot_end_num: int = 20
@@ -58,3 +63,7 @@ class ProfileUpdate(BaseModel):
     name: Optional[str] = None
     phone: Optional[str] = None
     vehicle_number: Optional[str] = None
+    vehicle_type: Optional[str] = None
+
+class WalletRechargeRequest(BaseModel):
+    amount: float = Field(..., gt=0)

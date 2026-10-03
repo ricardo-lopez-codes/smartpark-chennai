@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import api from '../services/api';
 import { wsService } from '../services/websocket';
 import { useNotification } from './NotificationContext';
+import { getLocalDateISO } from '../utils/formatters';
 
 const BookingContext = createContext();
 
@@ -14,7 +15,7 @@ export const BookingProvider = ({ children }) => {
   const [selectedLot, setSelectedLot] = useState(null);
   
   // Date & Time selection state
-  const getTodayISO = () => new Date().toISOString().split('T')[0];
+  const getTodayISO = () => getLocalDateISO();
   const [selectedDate, setSelectedDate] = useState(getTodayISO());
   const [selectedTime, setSelectedTime] = useState('10:00');
   const [selectedDuration, setSelectedDuration] = useState(2);

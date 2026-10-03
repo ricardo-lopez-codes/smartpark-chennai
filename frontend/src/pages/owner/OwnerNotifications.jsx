@@ -8,20 +8,22 @@ export default function OwnerNotifications() {
   const [loading, setLoading] = useState(true);
   const { addNotification } = useNotification();
 
-  const fetchNotifications = async () => {
+  const fetchNotifications = async (isInitial = false) => {
     try {
-      setLoading(true);
+      if (isInitial) setLoading(true);
       const res = await api.get('/owner/notifications');
       setNotifications(res.data);
     } catch (err) {
       console.error('Failed to fetch notifications:', err);
     } finally {
-      setLoading(false);
+      if (isInitial) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchNotifications();
+    fetchNotifications(true);
+    const interval = setInterval(() => fetchNotifications(false), 4000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleMarkRead = async (id) => {
@@ -30,6 +32,7 @@ export default function OwnerNotifications() {
       setNotifications(prev =>
         prev.map(n => (n.id === id ? { ...n, is_read: true } : n))
       );
+      window.dispatchEvent(new Event('ownerNotificationsUpdated'));
     } catch (err) {
       console.error(err);
     }
@@ -39,6 +42,7 @@ export default function OwnerNotifications() {
     try {
       await api.post('/owner/notifications/read', {});
       setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+      window.dispatchEvent(new Event('ownerNotificationsUpdated'));
       addNotification({
         title: 'Notifications Cleared',
         message: 'All notifications marked as read.',

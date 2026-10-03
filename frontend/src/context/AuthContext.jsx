@@ -49,7 +49,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const registerCivilian = async (name, email, phone, password, vehicle_number) => {
+  const registerCivilian = async (name, email, phone, password, vehicle_number, vehicle_type = 'CAR') => {
     try {
       console.log('[API] Registering civilian account...');
       let res;
@@ -60,6 +60,7 @@ export const AuthProvider = ({ children }) => {
           phone,
           password,
           vehicle_number,
+          vehicle_type,
           role: 'civilian'
         });
       } catch (err1) {
@@ -71,6 +72,7 @@ export const AuthProvider = ({ children }) => {
             phone,
             password,
             vehicle_number,
+            vehicle_type,
             role: 'civilian'
           });
         } else {
@@ -145,7 +147,8 @@ export const AuthProvider = ({ children }) => {
       registerCivilian,
       registerOwner,
       logout,
-      updateProfile
+      updateProfile,
+      refreshUser: fetchMe
     }}>
       {children}
     </AuthContext.Provider>

@@ -2,16 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { CreditCard, ArrowLeft, MapPin, Lock, Calendar, Clock } from 'lucide-react';
 import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import { useBooking } from '../context/BookingContext';
 import { useNotification } from '../context/NotificationContext';
 import RazorpayModal from '../components/RazorpayModal';
-import { formatCurrency } from '../utils/formatters';
+import { formatCurrency, getLocalDateISO } from '../utils/formatters';
 
 export default function PaymentConfirm() {
   const [searchParams] = useSearchParams();
   const lotId = searchParams.get('lot_id');
   const slotId = searchParams.get('slot_id');
-  const dateStr = searchParams.get('date') || new Date().toISOString().split('T')[0];
+  const todayISO = getLocalDateISO();
+  const rawDate = searchParams.get('date');
+  const dateStr = (!rawDate || rawDate < todayISO) ? todayISO : rawDate;
   const timeStr = searchParams.get('time') || '10:00';
   const duration = parseInt(searchParams.get('duration') || '2', 10);
 
@@ -24,6 +27,7 @@ export default function PaymentConfirm() {
   const [isRazorpayOpen, setIsRazorpayOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  const { refreshUser } = useAuth();
   const { fetchActiveBooking } = useBooking();
   const { addNotification } = useNotification();
   const navigate = useNavigate();
@@ -51,7 +55,6 @@ export default function PaymentConfirm() {
   const parkingFee = lot ? lot.price_per_hour * duration : 0;
   const serviceFee = 10;
   const totalAmount = parkingFee + serviceFee;
-  const earnedCredits = duration * 10;
 
   // Format 12-hour time
   const format12Hour = (tStr) => {
@@ -87,10 +90,11 @@ export default function PaymentConfirm() {
 
       const newBooking = bookingRes.data;
       await fetchActiveBooking();
+      await refreshUser();
 
       addNotification({
         title: '✓ Paid via Wallet',
-        message: `₹${totalAmount} paid from Wallet. ${earnedCredits} reward credits added to your wallet!`,
+        message: `${formatCurrency(totalAmount)} paid successfully from your PARK-A-LOT Wallet.`,
         type: 'success',
         duration: 8000
       });
@@ -248,7 +252,7 @@ export default function PaymentConfirm() {
                 </p>
               </div>
               <div className="px-4 py-2 rounded-2xl bg-amber-100 border border-amber-300 text-[#171717] font-extrabold text-xs">
-                {slot ? `Slot ${slot.slot_number}` : 'Assigned on Arrival'}
+                Assigned on Arrival
               </div>
             </div>
 
@@ -284,20 +288,6 @@ export default function PaymentConfirm() {
               placeholder="e.g. TN-09-SP-2026"
               className="w-full px-4 py-3 rounded-xl border border-slate-300 font-extrabold text-slate-900 tracking-wider text-sm focus:ring-2 focus:ring-[#FFD21F] focus:border-transparent outline-none uppercase"
             />
-          </div>
-
-          {/* Reward Credits Banner */}
-          <div className="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 border border-emerald-300 text-emerald-950 flex items-center justify-between text-xs font-extrabold shadow-xs">
-            <div className="flex items-center gap-2">
-              <span className="text-base">🎁</span>
-              <div>
-                <span>Reward Credits: Earn +{earnedCredits} Credits!</span>
-                <p className="text-[10px] text-emerald-800 font-medium">1 Hour = 10 Credits (₹10 value credited to your wallet)</p>
-              </div>
-            </div>
-            <span className="px-2.5 py-1 rounded-full bg-emerald-200 text-emerald-900 text-[10px] font-black uppercase">
-              +{earnedCredits} Credits
-            </span>
           </div>
 
           {/* PAYMENT METHOD SELECTOR (FASTag, Razorpay, PARK-A-LOT Wallet) */}

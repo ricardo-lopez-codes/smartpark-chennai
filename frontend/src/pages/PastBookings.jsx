@@ -101,8 +101,8 @@ export default function PastBookings() {
             >
               <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-100">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-900 border border-amber-200 flex items-center justify-center font-extrabold text-sm">
-                    {b.slot_number}
+                  <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-900 border border-amber-200 flex items-center justify-center font-extrabold text-lg">
+                    🅿️
                   </div>
                   <div>
                     <h3 className="font-extrabold text-[#171717] text-base">{b.parking_lot_name}</h3>

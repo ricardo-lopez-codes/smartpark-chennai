@@ -8,8 +8,21 @@ import api from '../../services/api';
 export default function OwnerLayout({ children }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [lotInfo, setLotInfo] = useState({ name: 'Loading facility...', address: '' });
+  const [unreadNotifsCount, setUnreadNotifsCount] = useState(0);
   const { user } = useAuth();
   const location = useLocation();
+
+  const fetchUnreadCount = async () => {
+    try {
+      const res = await api.get('/owner/notifications');
+      if (Array.isArray(res.data)) {
+        const unread = res.data.filter(n => !n.is_read).length;
+        setUnreadNotifsCount(unread);
+      }
+    } catch (err) {
+      console.warn('Could not fetch unread notifications count:', err);
+    }
+  };
 
   useEffect(() => {
     const fetchLotInfo = async () => {
@@ -29,7 +42,14 @@ export default function OwnerLayout({ children }) {
 
     if (user && user.role === 'owner') {
       fetchLotInfo();
+      fetchUnreadCount();
     }
+
+    const interval = setInterval(() => {
+      if (user && user.role === 'owner') {
+        fetchUnreadCount();
+      }
+    }, 4000);
 
     const handleSettingsUpdate = () => {
       if (user && user.role === 'owner') {
@@ -37,9 +57,18 @@ export default function OwnerLayout({ children }) {
       }
     };
 
+    const handleNotifsUpdate = () => {
+      if (user && user.role === 'owner') {
+        fetchUnreadCount();
+      }
+    };
+
     window.addEventListener('ownerLotSettingsUpdated', handleSettingsUpdate);
+    window.addEventListener('ownerNotificationsUpdated', handleNotifsUpdate);
     return () => {
+      clearInterval(interval);
       window.removeEventListener('ownerLotSettingsUpdated', handleSettingsUpdate);
+      window.removeEventListener('ownerNotificationsUpdated', handleNotifsUpdate);
     };
   }, [user]);
 
@@ -64,7 +93,7 @@ export default function OwnerLayout({ children }) {
       <OwnerSidebar
         mobileOpen={mobileOpen}
         setMobileOpen={setMobileOpen}
-        unreadNotifsCount={2}
+        unreadNotifsCount={unreadNotifsCount}
         selectedLotName={lotInfo.name}
       />
 
@@ -104,7 +133,9 @@ export default function OwnerLayout({ children }) {
               title="Notifications"
             >
               <Bell className="w-4 h-4" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500" />
+              {unreadNotifsCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse ring-2 ring-white" />
+              )}
             </Link>
 
             {/* Profile Avatar */}

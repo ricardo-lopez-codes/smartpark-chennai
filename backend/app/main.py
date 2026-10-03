@@ -19,6 +19,8 @@ from app.api.owner import router as owner_router
 from app.api.iot import router as iot_router
 from app.api.admin import router as admin_router
 
+from app.models.notification import OwnerNotification
+
 Base.metadata.create_all(bind=engine)
 
 def run_db_migrations():
@@ -68,6 +70,14 @@ def run_db_migrations():
 
         ("users", "wallet_balance FLOAT DEFAULT 0.0"),
         ("users", "wallet_credits INTEGER DEFAULT 0"),
+        ("users", "vehicle_type VARCHAR DEFAULT 'CAR'"),
+
+        ("parking_lots", "car_slots INTEGER DEFAULT 15"),
+        ("parking_lots", "bike_slots INTEGER DEFAULT 10"),
+        ("parking_lots", "car_price_per_hour FLOAT DEFAULT 40.0"),
+        ("parking_lots", "bike_price_per_hour FLOAT DEFAULT 20.0"),
+
+        ("bookings", "vehicle_type VARCHAR DEFAULT 'CAR'"),
 
         ("payments", "payment_method VARCHAR DEFAULT 'RAZORPAY'"),
         ("payments", "transaction_reference VARCHAR"),
@@ -198,3 +208,5 @@ async def websocket_endpoint(websocket: WebSocket):
             data = await websocket.receive_text()
     except WebSocketDisconnect:
         manager.disconnect(websocket)
+
+# Auto-reload trigger for vehicle_type and owner lot enhancements

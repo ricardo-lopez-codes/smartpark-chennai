@@ -10,7 +10,10 @@ async def evaluate_overstays(db: Session):
     Calculates 15-minute warnings, grace period tracking, and generates
     security alerts for overstaying vehicles.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now()
+    if now.tzinfo is not None:
+        now = now.replace(tzinfo=None)
+
     # Fetch non-completed, non-cancelled bookings
     active_bookings = db.query(Booking).filter(
         Booking.status.in_(["UPCOMING", "ACTIVE", "EXTENDED"])
@@ -19,13 +22,15 @@ async def evaluate_overstays(db: Session):
     alerts_triggered = []
 
     for booking in active_bookings:
-        # Ensure UTC timezone aware comparisons
-        start_t = booking.start_time.replace(tzinfo=timezone.utc) if booking.start_time.tzinfo is None else booking.start_time
-        paid_end_t = booking.paid_end_time.replace(tzinfo=timezone.utc) if booking.paid_end_time.tzinfo is None else booking.paid_end_time
+        if not booking.start_time or not booking.paid_end_time:
+            continue
+
+        start_t = booking.start_time.replace(tzinfo=None) if booking.start_time.tzinfo is not None else booking.start_time
+        paid_end_t = booking.paid_end_time.replace(tzinfo=None) if booking.paid_end_time.tzinfo is not None else booking.paid_end_time
         
         if not booking.grace_end_time:
             booking.grace_end_time = paid_end_t + timedelta(minutes=15)
-        grace_end_t = booking.grace_end_time.replace(tzinfo=timezone.utc) if booking.grace_end_time.tzinfo is None else booking.grace_end_time
+        grace_end_t = booking.grace_end_time.replace(tzinfo=None) if booking.grace_end_time.tzinfo is not None else booking.grace_end_time
 
         # 1. Check for 15-Minute Expiry Warning (15 mins prior to paid_end_time)
         time_until_expiry = (paid_end_t - now).total_seconds() / 60.0

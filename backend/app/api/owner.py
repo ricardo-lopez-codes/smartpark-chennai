@@ -681,32 +681,107 @@ def get_owner_notifications(
     db: Session = Depends(get_db)
 ):
     lot = get_owner_lot(db, current_user)
+    from app.models.notification import OwnerNotification
+    
+    db_notifs = db.query(OwnerNotification).filter(
+        OwnerNotification.parking_lot_id == lot.id
+    ).order_by(OwnerNotification.created_at.desc()).limit(50).all()
+
     now = datetime.now(timezone.utc)
 
-    # Operational parking notifications only (NO IoT health!)
-    return [
-        {
-            "id": 1,
-            "title": "New Booking Confirmed",
-            "message": f"Slot A1 booked for 2 hours at {lot.name}.",
-            "time": "5 mins ago",
-            "type": "success"
-        },
-        {
-            "id": 2,
-            "title": "Payment Authorization",
-            "message": "Payment of ₹90 received via Razorpay UPI.",
-            "time": "25 mins ago",
-            "type": "info"
-        },
-        {
-            "id": 3,
-            "title": "High Occupancy Alert",
-            "message": f"{lot.name} is currently at 85% occupancy.",
-            "time": "1 hour ago",
-            "type": "warning"
-        }
-    ]
+    if db_notifs:
+        results = []
+        for n in db_notifs:
+            created_t = n.created_at.replace(tzinfo=timezone.utc) if n.created_at.tzinfo is None else n.created_at
+            sec_ago = int((now - created_t).total_seconds())
+            if sec_ago < 60:
+                time_str = "Just now"
+            elif sec_ago < 3600:
+                time_str = f"{sec_ago // 60} mins ago"
+            elif sec_ago < 86400:
+                time_str = f"{sec_ago // 3600} hours ago"
+            else:
+                time_str = created_t.strftime("%b %d, %I:%M %p")
+
+            results.append({
+                "id": n.id,
+                "title": n.title,
+                "message": n.message,
+                "type": n.type,
+                "severity": n.severity or "info",
+                "is_read": n.is_read,
+                "timestamp": time_str
+            })
+        return results
+
+    # Fallback to dynamic real-time notifications generated from live bookings
+    recent_bookings = db.query(Booking).filter(
+        Booking.parking_lot_id == lot.id
+    ).order_by(Booking.created_at.desc()).limit(10).all()
+
+    results = []
+    for b in recent_bookings:
+        b_created = b.created_at.replace(tzinfo=timezone.utc) if (b.created_at and b.created_at.tzinfo is None) else (b.created_at or now)
+        sec_ago = int((now - b_created).total_seconds())
+        time_str = f"{sec_ago // 60} mins ago" if sec_ago < 3600 else f"{sec_ago // 3600} hours ago"
+
+        if b.status in ["EARLY_EXIT", "CANCELLED"]:
+            results.append({
+                "id": b.id * 10 + 1,
+                "title": "Early Exit & Refund",
+                "message": f"Session for VRN {b.vehicle_number or 'Vehicle'} ended early ({b.booking_id}). Refund processed.",
+                "type": "early_exit",
+                "severity": "info",
+                "is_read": False,
+                "timestamp": time_str
+            })
+        else:
+            results.append({
+                "id": b.id * 10 + 2,
+                "title": "New Booking Confirmed",
+                "message": f"Reservation ({b.booking_id}) for {b.duration_hours}h confirmed. Amount: ₹{b.amount:.2f}",
+                "type": "new_booking",
+                "severity": "success",
+                "is_read": False,
+                "timestamp": time_str
+            })
+
+    if not results:
+        results = [
+            {
+                "id": 100,
+                "title": "Facility Verification Pending",
+                "message": f"Complete GCC documentation & site inspection for {lot.name}.",
+                "type": "occupancy_alert",
+                "severity": "warning",
+                "is_read": False,
+                "timestamp": "Just now"
+            }
+        ]
+
+    return results
+
+@router.post("/notifications/read")
+def mark_owner_notification_read(
+    payload: dict = {},
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    lot = get_owner_lot(db, current_user)
+    from app.models.notification import OwnerNotification
+
+    notif_id = payload.get("notification_id")
+    if notif_id:
+        n = db.query(OwnerNotification).filter(OwnerNotification.id == notif_id, OwnerNotification.parking_lot_id == lot.id).first()
+        if n:
+            n.is_read = True
+            db.commit()
+    else:
+        # Mark all as read
+        db.query(OwnerNotification).filter(OwnerNotification.parking_lot_id == lot.id).update({"is_read": True})
+        db.commit()
+
+    return {"success": True, "message": "Notification status updated."}
 
 def parse_facilities(fac_str: Optional[str]) -> List[str]:
     if not fac_str:
@@ -737,6 +812,10 @@ def format_lot_settings_response(lot: ParkingLot, user: User) -> dict:
         "email": lot.email or user.email,
         "address": lot.address,
         "total_slots": tot,
+        "car_slots": lot.car_slots if lot.car_slots is not None else 15,
+        "bike_slots": lot.bike_slots if lot.bike_slots is not None else 10,
+        "car_price_per_hour": lot.car_price_per_hour if lot.car_price_per_hour is not None else (lot.price_per_hour or 40.0),
+        "bike_price_per_hour": lot.bike_price_per_hour if lot.bike_price_per_hour is not None else 20.0,
         "slot_prefix": prefix,
         "slot_start": start_num,
         "slot_end": end_num,
@@ -767,6 +846,10 @@ def update_owner_lot_settings(
     email: Optional[str] = Query(None),
     address: Optional[str] = Query(None),
     total_slots: Optional[int] = Query(None),
+    car_slots: Optional[int] = Query(None),
+    bike_slots: Optional[int] = Query(None),
+    car_price_per_hour: Optional[float] = Query(None),
+    bike_price_per_hour: Optional[float] = Query(None),
     slot_prefix: Optional[str] = Query(None),
     slot_start: Optional[int] = Query(None),
     slot_end: Optional[int] = Query(None),
@@ -789,6 +872,10 @@ def update_owner_lot_settings(
     op_time = payload.opening_time if (payload and payload.opening_time is not None) else opening_time
     cl_time = payload.closing_time if (payload and payload.closing_time is not None) else closing_time
     price = payload.price_per_hour if (payload and payload.price_per_hour is not None) else price_per_hour
+    c_slots = payload.car_slots if (payload and payload.car_slots is not None) else car_slots
+    b_slots = payload.bike_slots if (payload and payload.bike_slots is not None) else bike_slots
+    c_price = payload.car_price_per_hour if (payload and payload.car_price_per_hour is not None) else car_price_per_hour
+    b_price = payload.bike_price_per_hour if (payload and payload.bike_price_per_hour is not None) else bike_price_per_hour
     facs = payload.facilities if (payload and payload.facilities is not None) else None
     desc = payload.description if (payload and payload.description is not None) else description
     canc_pol = payload.cancellation_policy if (payload and payload.cancellation_policy is not None) else cancellation_policy
@@ -814,6 +901,15 @@ def update_owner_lot_settings(
         lot.closing_time = cl_time
     if price is not None:
         lot.price_per_hour = price
+    if c_slots is not None:
+        lot.car_slots = c_slots
+    if b_slots is not None:
+        lot.bike_slots = b_slots
+    if c_price is not None:
+        lot.car_price_per_hour = c_price
+        lot.price_per_hour = c_price
+    if b_price is not None:
+        lot.bike_price_per_hour = b_price
     if desc:
         lot.description = desc
     if canc_pol:
@@ -824,54 +920,9 @@ def update_owner_lot_settings(
         else:
             lot.facilities = str(facs)
 
-    # Re-configure slots safely
-    if any(x is not None for x in [tot_slots, s_prefix, s_start, s_end]):
-        prefix = (s_prefix or lot.slot_prefix or "A").upper().strip()
-        start_num = s_start if s_start is not None else (lot.slot_start_num or 1)
-        
-        if s_end is not None:
-            end_num = s_end
-            count = max(1, end_num - start_num + 1)
-        elif tot_slots is not None:
-            count = max(1, tot_slots)
-            end_num = start_num + count - 1
-        else:
-            end_num = lot.slot_end_num or (start_num + (lot.total_slots or 20) - 1)
-            count = max(1, end_num - start_num + 1)
-
-        new_slot_numbers = [f"{prefix}{i}" for i in range(start_num, end_num + 1)]
-        existing_slots = db.query(ParkingSlot).filter(ParkingSlot.parking_lot_id == lot.id).all()
-        existing_map = {s.slot_number: s for s in existing_slots}
-
-        for num_str in new_slot_numbers:
-            if num_str not in existing_map:
-                new_slot = ParkingSlot(
-                    parking_lot_id=lot.id,
-                    slot_number=num_str,
-                    status="available",
-                    zone=f"Zone {prefix}",
-                    price_per_hour=lot.price_per_hour,
-                    sensor_id=f"ESP32-MAG-{lot.id:02d}-{num_str}"
-                )
-                db.add(new_slot)
-            else:
-                ex_slot = existing_map[num_str]
-                if ex_slot.status == "unavailable":
-                    ex_slot.status = "available"
-
-        new_num_set = set(new_slot_numbers)
-        for ex_slot in existing_slots:
-            if ex_slot.slot_number not in new_num_set:
-                has_bookings = db.query(Booking).filter(Booking.slot_id == ex_slot.id).first() is not None
-                if has_bookings:
-                    ex_slot.status = "unavailable"
-                else:
-                    db.delete(ex_slot)
-
-        lot.slot_prefix = prefix
-        lot.slot_start_num = start_num
-        lot.slot_end_num = end_num
-        lot.total_slots = len(new_slot_numbers)
+    # Re-configure total_slots if car_slots / bike_slots changed
+    if c_slots is not None or b_slots is not None:
+        lot.total_slots = (lot.car_slots or 0) + (lot.bike_slots or 0)
 
     db.commit()
     db.refresh(lot)

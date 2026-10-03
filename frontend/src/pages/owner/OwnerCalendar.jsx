@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar as CalendarIcon, Clock, Layers, IndianRupee, TrendingUp } from 'lucide-react';
 import api from '../../services/api';
+import { getLocalDateISO } from '../../utils/formatters';
 
 export default function OwnerCalendar() {
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(getLocalDateISO());
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 

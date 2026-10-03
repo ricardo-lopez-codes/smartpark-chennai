@@ -42,6 +42,10 @@ class OwnerLotSettingsResponse(BaseModel):
     email: Optional[str] = None
     address: str
     total_slots: int
+    car_slots: int = 15
+    bike_slots: int = 10
+    car_price_per_hour: float = 40.0
+    bike_price_per_hour: float = 20.0
     slot_prefix: str = "A"
     slot_start: int = 1
     slot_end: int = 20
@@ -62,6 +66,10 @@ class OwnerLotSettingsUpdate(BaseModel):
     email: Optional[str] = None
     address: Optional[str] = None
     total_slots: Optional[int] = None
+    car_slots: Optional[int] = None
+    bike_slots: Optional[int] = None
+    car_price_per_hour: Optional[float] = None
+    bike_price_per_hour: Optional[float] = None
     slot_prefix: Optional[str] = None
     slot_start: Optional[int] = None
     slot_end: Optional[int] = None

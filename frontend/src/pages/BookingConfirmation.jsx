@@ -52,8 +52,11 @@ export default function BookingConfirmation() {
         <div>
           <span className="text-xs font-extrabold uppercase tracking-widest text-emerald-700">Reservation Success</span>
           <h1 className="text-3xl font-extrabold text-[#171717] mt-1">Booking Confirmed</h1>
-          <p className="text-xs text-slate-600 mt-1 font-medium">
-            Slot <span className="font-extrabold text-blue-700">{booking.slot_number}</span> is reserved for your vehicle.
+          <p className="text-xs text-slate-600 mt-1 font-medium space-y-1">
+            <span>Parking capacity & time reserved for your vehicle.</span>
+            <span className="block mt-1 font-bold text-amber-800 bg-amber-50 py-1.5 px-3 rounded-xl border border-amber-200">
+              📍 Your physical parking position will be assigned when you reach the spot.
+            </span>
           </p>
         </div>
 
@@ -70,8 +73,8 @@ export default function BookingConfirmation() {
           </div>
 
           <div className="flex justify-between items-center">
-            <span className="text-slate-500">Parking Slot:</span>
-            <span className="font-mono font-bold text-blue-700 text-sm">{booking.slot_number}</span>
+            <span className="text-slate-500">Physical Position:</span>
+            <span className="font-extrabold text-blue-700 text-xs">{booking.assigned_position_name || "Assigned on arrival"}</span>
           </div>
 
           <div className="flex justify-between items-center">

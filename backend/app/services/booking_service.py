@@ -16,8 +16,8 @@ def generate_booking_id() -> str:
 def format_booking_response(booking: Booking, now: datetime = None) -> dict:
     if now is None:
         now = datetime.now()
-        if now.tzinfo is not None:
-            now = now.replace(tzinfo=None)
+    if now and now.tzinfo is not None:
+        now = now.replace(tzinfo=None)
     
     start_t = booking.start_time
     if start_t and start_t.tzinfo is not None:
@@ -53,8 +53,6 @@ def format_booking_response(booking: Booking, now: datetime = None) -> dict:
     slot_num = "Assigned on arrival"
     if booking.assigned_position_name:
         slot_num = booking.assigned_position_name
-    elif booking.slot:
-        slot_num = booking.slot.slot_number
 
     grace_end_t = booking.grace_end_time or (paid_end_t + timedelta(minutes=15))
     if grace_end_t and grace_end_t.tzinfo is not None:
@@ -167,6 +165,8 @@ async def create_booking(
     if now.tzinfo is not None:
         now = now.replace(tzinfo=None)
 
+    today_str = now.strftime("%Y-%m-%d")
+
     # Parse Date & Time
     if booking_date_str and start_time_str:
         try:
@@ -175,12 +175,20 @@ async def create_booking(
             start_t = datetime(date_parts[0], date_parts[1], date_parts[2], time_parts[0], time_parts[1])
         except Exception:
             start_t = now
-            booking_date_str = now.strftime("%Y-%m-%d")
+            booking_date_str = today_str
     else:
         start_t = now
-        booking_date_str = now.strftime("%Y-%m-%d")
+        booking_date_str = today_str
 
     paid_end_t = start_t + timedelta(hours=duration_hours)
+
+    # GUARANTEE: Newly created bookings must NEVER be created as already expired.
+    # If requested window is in the past relative to current server time, set session start to now.
+    if paid_end_t <= now:
+        start_t = now
+        booking_date_str = today_str
+        paid_end_t = start_t + timedelta(hours=duration_hours)
+
     buffer_end_t = paid_end_t + timedelta(minutes=15)
 
     # CAPACITY CHECK (Feature 3 & 4)
@@ -209,8 +217,8 @@ async def create_booking(
     booking_charge_val = 10.0
     total_amount = parking_fee + booking_charge_val
 
-    # Credit rewards: 1 hour = 10 credits (e.g. 3 hours = 30 credits)
-    earned_credits = duration_hours * 10
+    # No hourly credit rewards given on booking
+    earned_credits = 0
 
     # If WALLET payment method selected, verify and deduct balance
     pay_method = (payment_method or "RAZORPAY").upper().strip()
@@ -219,13 +227,11 @@ async def create_booking(
         if current_bal < total_amount:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Insufficient wallet balance. Available balance is ₹{current_bal:.2f}, but total payable amount is ₹{total_amount:.2f}."
+                detail=f"Insufficient wallet credits. Available credits: {int(current_bal)}, required: {int(total_amount)}."
             )
-        user.wallet_balance = round(current_bal - total_amount, 2)
-
-    # Award reward credits & add credit value to wallet
-    user.wallet_credits = (user.wallet_credits or 0) + earned_credits
-    user.wallet_balance = round((user.wallet_balance or 0.0) + float(earned_credits), 2)
+        new_bal = round(current_bal - total_amount, 2)
+        user.wallet_balance = new_bal
+        user.wallet_credits = int(new_bal)
 
     b_id = generate_booking_id()
     booking_status = "UPCOMING" if start_t > now + timedelta(minutes=5) else "ACTIVE"
@@ -257,6 +263,19 @@ async def create_booking(
     db.commit()
     db.refresh(booking)
 
+    try:
+        from app.models.notification import create_owner_notification
+        create_owner_notification(
+            db=db,
+            parking_lot_id=lot.id,
+            title="New Booking Confirmed",
+            message=f"New reservation ({b_id}) created for VRN {vehicle_number or 'Vehicle'} for {duration_hours}h. Total: ₹{total_amount:.2f}",
+            notif_type="new_booking",
+            severity="success"
+        )
+    except Exception as e:
+        print(f"Failed to create owner notification: {e}")
+
     return booking
 
     return booking
@@ -287,7 +306,7 @@ async def extend_booking(db: Session, booking_id: int, user: User, additional_ho
 
 async def cancel_booking(db: Session, booking_id: int, user: User) -> dict:
     from app.services.early_exit_service import process_early_exit
-    res = await process_early_exit(booking_id=booking_id, user=user, db=db)
+    res = await process_early_exit(booking_id=booking_id, user=user, db=db, is_cancellation=True)
     return {
         "booking_id": res["booking_id"],
         "original_amount": res["original_payment"],
@@ -297,25 +316,29 @@ async def cancel_booking(db: Session, booking_id: int, user: User) -> dict:
     }
 
 async def check_and_expire_booking(db: Session, booking: Booking):
-    now = datetime.now(timezone.utc)
-    paid_end_t = booking.paid_end_time.replace(tzinfo=timezone.utc) if booking.paid_end_time.tzinfo is None else booking.paid_end_time
-    start_t = booking.start_time.replace(tzinfo=timezone.utc) if booking.start_time.tzinfo is None else booking.start_time
+    now = datetime.now()
+    if now.tzinfo is not None:
+        now = now.replace(tzinfo=None)
+        
+    start_t = booking.start_time
+    if start_t and start_t.tzinfo is not None:
+        start_t = start_t.replace(tzinfo=None)
+        
+    paid_end_t = booking.paid_end_time
+    if paid_end_t and paid_end_t.tzinfo is not None:
+        paid_end_t = paid_end_t.replace(tzinfo=None)
     
     # Transition UPCOMING to ACTIVE when start_time arrives
-    if booking.status == "UPCOMING" and now >= start_t and now < paid_end_t:
-        booking.status = "ACTIVE"
-        db.commit()
+    if booking.status == "UPCOMING" and start_t and paid_end_t:
+        if now >= start_t and now < paid_end_t:
+            booking.status = "ACTIVE"
+            db.commit()
 
-    if now >= paid_end_t and booking.status in ["UPCOMING", "ACTIVE", "EXTENDED"]:
+    if paid_end_t and now >= paid_end_t and booking.status in ["UPCOMING", "ACTIVE", "EXTENDED"]:
         booking.status = "EXPIRED"
         booking.actual_end_time = now
         db.commit()
 
-        slot = booking.slot
-        if slot and slot.sensor:
-            if slot.sensor.vehicle_detected:
-                await update_slot_sensor_status(db, slot.id, "occupied")
-            else:
-                await update_slot_sensor_status(db, slot.id, "available")
-        else:
-            await update_slot_sensor_status(db, slot.id, "available")
+        target_slot_id = booking.assigned_position_id or booking.slot_id
+        if target_slot_id and target_slot_id > 0:
+            await update_slot_sensor_status(db, target_slot_id, "available")
