@@ -14,6 +14,7 @@ from app.api.bookings import router as bookings_router
 from app.api.payments import router as payments_router
 from app.api.demo import router as demo_router
 from app.api.owner import router as owner_router
+from app.api.iot import router as iot_router
 
 Base.metadata.create_all(bind=engine)
 
@@ -52,6 +53,7 @@ app.include_router(bookings_router, prefix=settings.API_V1_STR)
 app.include_router(payments_router, prefix=settings.API_V1_STR)
 app.include_router(demo_router, prefix=settings.API_V1_STR)
 app.include_router(owner_router, prefix=settings.API_V1_STR)
+app.include_router(iot_router, prefix=settings.API_V1_STR)
 
 # Fallback /api/v1 aliases for legacy frontend clients
 app.include_router(auth_router, prefix="/api/v1")
@@ -60,6 +62,7 @@ app.include_router(parking_router, prefix="/api/v1")
 app.include_router(slots_router, prefix="/api/v1")
 app.include_router(bookings_router, prefix="/api/v1")
 app.include_router(owner_router, prefix="/api/v1")
+app.include_router(iot_router, prefix="/api/v1")
 
 @app.on_event("startup")
 def startup_event():

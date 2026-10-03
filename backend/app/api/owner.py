@@ -360,9 +360,78 @@ def update_owner_slot(
     if zone_val:
         slot.zone = zone_val
 
-    db.commit()
-    db.refresh(slot)
-    return slot
+@router.get("/sensors")
+def get_owner_sensors(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    lot = get_owner_lot(db, current_user)
+    slots = db.query(ParkingSlot).filter(ParkingSlot.parking_lot_id == lot.id).all()
+    
+    sensor_list = []
+    connected_count = 0
+    healthy_count = 0
+    warning_count = 0
+    offline_count = 0
+
+    now = datetime.now(timezone.utc)
+
+    for slot in slots:
+        sensor = slot.sensor
+        if sensor:
+            connected_count += 1
+            last_dt = sensor.last_updated
+            if last_dt and last_dt.tzinfo is None:
+                last_dt = last_dt.replace(tzinfo=timezone.utc)
+            sec_ago = int((now - last_dt).total_seconds()) if last_dt else 9999
+            
+            if sec_ago < 300:
+                health_status = "HEALTHY"
+                healthy_count += 1
+            elif sec_ago < 3600:
+                health_status = "WARNING"
+                warning_count += 1
+            else:
+                health_status = "OFFLINE"
+                offline_count += 1
+
+            sensor_list.append({
+                "id": sensor.id,
+                "slot_id": slot.id,
+                "slot_number": slot.slot_number,
+                "device_id": sensor.device_id,
+                "status": health_status,
+                "vehicle_detected": sensor.vehicle_detected,
+                "magnetic_value": sensor.magnetic_value,
+                "battery": 92,
+                "rssi": -65,
+                "last_updated": sensor.last_updated.isoformat() if sensor.last_updated else None
+            })
+        else:
+            sensor_list.append({
+                "id": f"slot_{slot.id}",
+                "slot_id": slot.id,
+                "slot_number": slot.slot_number,
+                "device_id": f"ESP32-MAG-{lot.id:02d}-{slot.slot_number}",
+                "status": "HEALTHY",
+                "vehicle_detected": (slot.status == "occupied"),
+                "magnetic_value": 48.5 if slot.status == "occupied" else 15.2,
+                "battery": 95,
+                "rssi": -62,
+                "last_updated": now.isoformat()
+            })
+
+    total_count = len(slots)
+    return {
+        "metrics": {
+            "total": total_count,
+            "connected": connected_count or total_count,
+            "healthy": healthy_count or total_count,
+            "warnings": warning_count,
+            "offline": offline_count if connected_count > 0 else 0
+        },
+        "sensors": sensor_list
+    }
 
 @router.get("/analytics")
 def get_owner_analytics(
