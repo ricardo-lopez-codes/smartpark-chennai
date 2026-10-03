@@ -80,7 +80,9 @@ class BookingResponse(BaseModel):
     cancellation_fee: Optional[float] = None
     refund_amount: Optional[float] = None
     refund_status: Optional[str] = "NONE"
+    refund_type: Optional[str] = "ORIGINAL_PAYMENT"
     refund_id: Optional[str] = None
+    credits_earned: Optional[int] = 0
     payment_id: Optional[str] = None
     created_at: datetime
     latitude: float
@@ -105,11 +107,18 @@ class EarlyExitPreviewResponse(BaseModel):
     unused_amount: float
     cancellation_fee: float
     refund_amount: float
+    cash_cancellation_fee: float
+    cash_refund_amount: float
+    wallet_cancellation_fee: float = 0.0
+    wallet_refund_amount: float
     booking_charge: float
     original_payment: float
     earned_amount: float
     parking_revenue: float
     payment_method: str
+
+class EarlyExitRequest(BaseModel):
+    refund_option: Optional[str] = "WALLET"  # WALLET (0% fee) or CASH / ORIGINAL_PAYMENT (30% fee)
 
 class EarlyExitResponse(BaseModel):
     booking_id: str
@@ -124,6 +133,7 @@ class EarlyExitResponse(BaseModel):
     original_payment: float
     earned_amount: float
     refund_status: str
+    refund_type: str
     refund_reference: str
     payment_method: str
     message: str

@@ -8,6 +8,8 @@ class UserBase(BaseModel):
     phone: Optional[str] = None
     vehicle_number: Optional[str] = "TN-09-AB-1234"
     role: Optional[str] = "civilian"
+    wallet_balance: float = 0.0
+    wallet_credits: int = 0
 
 class UserCreate(UserBase):
     password: str

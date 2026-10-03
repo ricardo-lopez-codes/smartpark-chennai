@@ -17,8 +17,9 @@ export default function PaymentConfirm() {
 
   const [lot, setLot] = useState(null);
   const [slot, setSlot] = useState(null);
+  const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [paymentMethod, setPaymentMethod] = useState('FASTAG'); // 'FASTAG' or 'RAZORPAY'
+  const [paymentMethod, setPaymentMethod] = useState('FASTAG'); // 'FASTAG', 'RAZORPAY', or 'WALLET'
   const [vehicleNumber, setVehicleNumber] = useState('TN-09-SP-2026');
   const [isRazorpayOpen, setIsRazorpayOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -36,6 +37,8 @@ export default function PaymentConfirm() {
           const slotRes = await api.get(`/slots/${slotId}`);
           setSlot(slotRes.data);
         }
+        const userRes = await api.get('/auth/me');
+        setUserData(userRes.data);
       } catch (err) {
         console.warn('Error fetching payment confirmation details:', err);
       } finally {
@@ -48,6 +51,7 @@ export default function PaymentConfirm() {
   const parkingFee = lot ? lot.price_per_hour * duration : 0;
   const serviceFee = 10;
   const totalAmount = parkingFee + serviceFee;
+  const earnedCredits = duration * 10;
 
   // Format 12-hour time
   const format12Hour = (tStr) => {
@@ -56,6 +60,53 @@ export default function PaymentConfirm() {
     const ampm = h >= 12 ? 'PM' : 'AM';
     const displayH = h % 12 === 0 ? 12 : h % 12;
     return `${displayH}:${m < 10 ? '0' + m : m} ${ampm}`;
+  };
+
+  const handleWalletPayment = async () => {
+    if ((userData?.wallet_balance || 0) < totalAmount) {
+      addNotification({
+        title: 'Insufficient Wallet Balance',
+        message: `Your wallet balance is ${formatCurrency(userData?.wallet_balance || 0)}. Total payable is ${formatCurrency(totalAmount)}. Please select FASTag or Razorpay.`,
+        type: 'error',
+        duration: 7000
+      });
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const bookingRes = await api.post('/bookings', {
+        parking_lot_id: parseInt(lotId, 10),
+        slot_id: (slotId && slotId !== 'null') ? parseInt(slotId, 10) : null,
+        booking_date: dateStr,
+        start_time_str: timeStr,
+        duration_hours: duration,
+        vehicle_number: vehicleNumber.toUpperCase().trim(),
+        payment_method: 'WALLET'
+      });
+
+      const newBooking = bookingRes.data;
+      await fetchActiveBooking();
+
+      addNotification({
+        title: '✓ Paid via Wallet',
+        message: `₹${totalAmount} paid from Wallet. ${earnedCredits} reward credits added to your wallet!`,
+        type: 'success',
+        duration: 8000
+      });
+
+      navigate(`/booking-confirmation/${newBooking.id}`);
+    } catch (err) {
+      const errorMsg = err.response?.data?.detail || 'Wallet payment failed.';
+      addNotification({
+        title: 'Wallet Payment Error',
+        message: errorMsg,
+        type: 'error',
+        duration: 7000
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleFastagPayment = async () => {
@@ -87,7 +138,7 @@ export default function PaymentConfirm() {
 
       addNotification({
         title: 'FASTag Payment Successful',
-        message: fastagRes.data.message || `₹${totalAmount} debited via NETC FASTag. Position will be assigned on arrival.`,
+        message: fastagRes.data.message || `₹${totalAmount} debited via NETC FASTag. Position will be assigned on arrival. ${earnedCredits} reward credits added!`,
         type: 'success'
       });
 
@@ -235,12 +286,28 @@ export default function PaymentConfirm() {
             />
           </div>
 
-          {/* Feature 1: PAYMENT METHOD SELECTOR (FASTag vs Razorpay) */}
+          {/* Reward Credits Banner */}
+          <div className="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 border border-emerald-300 text-emerald-950 flex items-center justify-between text-xs font-extrabold shadow-xs">
+            <div className="flex items-center gap-2">
+              <span className="text-base">🎁</span>
+              <div>
+                <span>Reward Credits: Earn +{earnedCredits} Credits!</span>
+                <p className="text-[10px] text-emerald-800 font-medium">1 Hour = 10 Credits (₹10 value credited to your wallet)</p>
+              </div>
+            </div>
+            <span className="px-2.5 py-1 rounded-full bg-emerald-200 text-emerald-900 text-[10px] font-black uppercase">
+              +{earnedCredits} Credits
+            </span>
+          </div>
+
+          {/* PAYMENT METHOD SELECTOR (FASTag, Razorpay, PARK-A-LOT Wallet) */}
           <div className="space-y-3">
             <label className="text-xs font-extrabold text-slate-700 uppercase tracking-wider block">
               Select Payment Method
             </label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              
+              {/* FASTag */}
               <button
                 type="button"
                 onClick={() => setPaymentMethod('FASTAG')}
@@ -252,11 +319,12 @@ export default function PaymentConfirm() {
               >
                 <div className="flex items-center justify-between w-full">
                   <span className="font-extrabold text-slate-900 text-sm">FASTag</span>
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold">NETC</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold">NETC</span>
                 </div>
-                <span className="text-[11px] text-slate-500 mt-2 font-medium">Automatic toll lane RFID deduction</span>
+                <span className="text-[11px] text-slate-500 mt-2 font-medium">RFID lane deduction</span>
               </button>
 
+              {/* Razorpay */}
               <button
                 type="button"
                 onClick={() => setPaymentMethod('RAZORPAY')}
@@ -270,8 +338,33 @@ export default function PaymentConfirm() {
                   <span className="font-extrabold text-slate-900 text-sm">Razorpay</span>
                   <CreditCard className="w-4 h-4 text-slate-700" />
                 </div>
-                <span className="text-[11px] text-slate-500 mt-2 font-medium">UPI, Net Banking, Cards & Wallets</span>
+                <span className="text-[11px] text-slate-500 mt-2 font-medium">UPI & Cards</span>
               </button>
+
+              {/* PARK-A-LOT Wallet */}
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('WALLET')}
+                className={`p-4 rounded-2xl border text-left transition-all flex flex-col justify-between ${
+                  paymentMethod === 'WALLET'
+                    ? 'border-[#171717] bg-emerald-50/90 ring-2 ring-emerald-500'
+                    : 'border-slate-200 bg-white hover:bg-slate-50'
+                }`}
+              >
+                <div className="flex items-center justify-between w-full">
+                  <span className="font-extrabold text-slate-900 text-sm">My Wallet</span>
+                  <span className="text-base">💳</span>
+                </div>
+                <div>
+                  <span className="text-xs font-black text-emerald-800 block mt-1">
+                    {formatCurrency(userData?.wallet_balance || 0)}
+                  </span>
+                  <span className="text-[10px] text-slate-500 font-medium block">
+                    {userData?.wallet_credits || 0} Credits Available
+                  </span>
+                </div>
+              </button>
+
             </div>
           </div>
 
@@ -297,14 +390,25 @@ export default function PaymentConfirm() {
           <div className="flex items-center gap-2 p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 font-medium">
             <Lock className="w-4 h-4 text-slate-700 flex-shrink-0" />
             <span>
-              {paymentMethod === 'FASTAG'
+              {paymentMethod === 'WALLET'
+                ? 'PARK-A-LOT Wallet Encrypted Instant Checkout'
+                : paymentMethod === 'FASTAG'
                 ? 'NETC FASTag Encrypted Sandbox Gateway'
                 : 'Encrypted Razorpay Checkout Structure • Demo Mode Active'}
             </span>
           </div>
 
           {/* PAY BUTTON */}
-          {paymentMethod === 'FASTAG' ? (
+          {paymentMethod === 'WALLET' ? (
+            <button
+              disabled={submitting}
+              onClick={handleWalletPayment}
+              className="w-full py-4 rounded-2xl bg-[#171717] hover:bg-slate-800 text-[#FFD21F] font-extrabold text-base shadow-md flex items-center justify-center gap-2 transition-all active:scale-98 disabled:opacity-50"
+            >
+              <span>💳</span>
+              {submitting ? 'Processing Wallet Checkout...' : `Pay ${formatCurrency(totalAmount)} via Wallet`}
+            </button>
+          ) : paymentMethod === 'FASTAG' ? (
             <button
               disabled={submitting}
               onClick={handleFastagPayment}

@@ -46,7 +46,9 @@ class Booking(Base):
     cancellation_fee = Column(Float, nullable=True)
     refund_amount = Column(Float, nullable=True)
     refund_status = Column(String, default="NONE", nullable=False) # NONE, PENDING, REFUNDED, FAILED
+    refund_type = Column(String, default="ORIGINAL_PAYMENT", nullable=True) # ORIGINAL_PAYMENT or WALLET
     refund_id = Column(String, nullable=True)
+    credits_earned = Column(Integer, default=0, nullable=False)
     payment_id = Column(String, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 

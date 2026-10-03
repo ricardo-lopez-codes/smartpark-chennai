@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { formatDurationSeconds, formatTime } from '../utils/formatters';
+import { formatDurationSeconds, formatTime, parseCleanDate } from '../utils/formatters';
 import { Clock, AlertTriangle, CalendarCheck } from 'lucide-react';
 
 export default function CountdownTimer({
@@ -16,8 +16,8 @@ export default function CountdownTimer({
     return () => clearInterval(timer);
   }, []);
 
-  const startMs = startTime ? new Date(startTime).getTime() : 0;
-  const paidEndMs = paidEndTime ? new Date(paidEndTime).getTime() : 0;
+  const startMs = startTime ? parseCleanDate(startTime).getTime() : 0;
+  const paidEndMs = paidEndTime ? parseCleanDate(paidEndTime).getTime() : 0;
 
   const isUpcoming = startMs > 0 && now < startMs;
   const isExpired = paidEndMs > 0 && now >= paidEndMs;

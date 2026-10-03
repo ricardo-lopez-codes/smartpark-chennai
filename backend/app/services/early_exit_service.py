@@ -48,17 +48,21 @@ def calculate_early_exit_breakdown(booking: Booking, now: datetime = None) -> di
     used_amount = round(used_hours * hourly_rate, 2)
     unused_amount = round(unused_hours * hourly_rate, 2)
     
-    # Cancellation fee is 30% of the UNUSED parking amount
-    cancellation_fee = round(unused_amount * 0.30, 2)
-    refund_amount = round(max(0.0, unused_amount - cancellation_fee), 2)
+    # Option 1: Cash/Original payment refund (30% fee)
+    cash_cancellation_fee = round(unused_amount * 0.30, 2)
+    cash_refund_amount = round(max(0.0, unused_amount - cash_cancellation_fee), 2)
+
+    # Option 2: Wallet refund (0% fee - 100% full refund)
+    wallet_cancellation_fee = 0.0
+    wallet_refund_amount = unused_amount
     
     # Original payment = parking_cost + booking_charge
     parking_cost = round(hourly_rate * duration_hours, 2)
     original_payment = round(booking.amount if booking.amount >= (parking_cost + booking_charge) else (parking_cost + booking_charge), 2)
     
-    # Final retained amount by system/owner
-    earned_amount = round(used_amount + cancellation_fee + booking_charge, 2)
-    parking_revenue = round(used_amount + cancellation_fee, 2)
+    # Final retained amount by system/owner (defaulting to wallet / cash perspective)
+    earned_amount = round(used_amount + cash_cancellation_fee + booking_charge, 2)
+    parking_revenue = round(used_amount + cash_cancellation_fee, 2)
 
     return {
         "booking_id": booking.booking_id,
@@ -72,8 +76,12 @@ def calculate_early_exit_breakdown(booking: Booking, now: datetime = None) -> di
         "unused_hours": unused_hours,
         "used_amount": used_amount,
         "unused_amount": unused_amount,
-        "cancellation_fee": cancellation_fee,
-        "refund_amount": refund_amount,
+        "cancellation_fee": cash_cancellation_fee,
+        "refund_amount": cash_refund_amount,
+        "cash_cancellation_fee": cash_cancellation_fee,
+        "cash_refund_amount": cash_refund_amount,
+        "wallet_cancellation_fee": 0.0,
+        "wallet_refund_amount": wallet_refund_amount,
         "booking_charge": booking_charge,
         "original_payment": original_payment,
         "earned_amount": earned_amount,
@@ -81,7 +89,7 @@ def calculate_early_exit_breakdown(booking: Booking, now: datetime = None) -> di
         "payment_method": booking.payment_method or "RAZORPAY"
     }
 
-async def process_early_exit(booking_id: int, user, db: Session) -> dict:
+async def process_early_exit(booking_id: int, user, db: Session, refund_option: str = "WALLET") -> dict:
     booking = db.query(Booking).filter(Booking.id == booking_id).first()
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found.")
@@ -92,42 +100,59 @@ async def process_early_exit(booking_id: int, user, db: Session) -> dict:
     if booking.status in ["COMPLETED", "CANCELLED", "EARLY_EXIT", "EXPIRED"]:
         raise HTTPException(status_code=400, detail=f"Booking is already closed with status: {booking.status}.")
 
-    now = datetime.now(timezone.utc)
-    breakdown = calculate_early_exit_breakdown(booking, now=now)
+    now = datetime.now()
+    if now.tzinfo is not None:
+        now = now.replace(tzinfo=None)
 
-    # 1. Update Booking status & breakdown metrics
+    breakdown = calculate_early_exit_breakdown(booking, now=now)
+    opt = (refund_option or "WALLET").upper().strip()
+
     booking.status = "EARLY_EXIT"
     booking.actual_end_time = now
     booking.used_hours = breakdown["used_hours"]
     booking.used_amount = breakdown["used_amount"]
     booking.unused_amount = breakdown["unused_amount"]
-    booking.cancellation_fee = breakdown["cancellation_fee"]
-    booking.refund_amount = breakdown["refund_amount"]
 
-    # 2. Process refund & create dedicated refund Payment record for auditability
-    pay_method = (booking.payment_method or "RAZORPAY").upper()
-    refund_amt = breakdown["refund_amount"]
-    
-    if pay_method == "FASTAG":
-        ref_code = f"NETC_FASTAG_REFUND_{now.strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:6].upper()}"
-        refund_status_val = "REFUNDED" # Refund executed via NETC sandbox
+    if opt in ["WALLET", "OPTION2", "FULL_WALLET"]:
+        # Option 2: Full Wallet Refund (0% fee)
+        cancellation_fee = 0.0
+        refund_amt = breakdown["wallet_refund_amount"]
+        refund_type_val = "WALLET"
+        refund_status_val = "REFUNDED_TO_WALLET"
+        ref_code = f"WALLET_REFUND_{now.strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:6].upper()}"
+
+        # Credit 100% of unused parking amount directly to user's wallet
+        owner_user = booking.user
+        if owner_user:
+            owner_user.wallet_balance = round(owner_user.wallet_balance + refund_amt, 2)
+
+        msg = f"Full 100% refund of ₹{refund_amt} credited to your PARK-A-LOT Wallet with 0 cancellation fee!"
     else:
-        ref_code = f"rfnd_razorpay_{uuid.uuid4().hex[:8]}"
+        # Option 1: Cash / Original Payment Refund (30% fee)
+        cancellation_fee = breakdown["cash_cancellation_fee"]
+        refund_amt = breakdown["cash_refund_amount"]
+        refund_type_val = "ORIGINAL_PAYMENT"
         refund_status_val = "REFUNDED"
+        ref_code = f"CASH_REFUND_{now.strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:6].upper()}"
+        msg = f"Refund of ₹{refund_amt} (minus 30% cancellation fee of ₹{cancellation_fee}) processed to original payment mode."
 
+    booking.cancellation_fee = cancellation_fee
+    booking.refund_amount = refund_amt
+    booking.refund_type = refund_type_val
+    booking.refund_status = refund_status_val
+    booking.refund_id = ref_code
+
+    pay_method = (booking.payment_method or "RAZORPAY").upper()
     refund_payment = Payment(
         booking_id=booking.id,
         razorpay_order_id=f"order_refund_{uuid.uuid4().hex[:6]}",
-        payment_method=pay_method,
+        payment_method=refund_type_val,
         transaction_reference=ref_code,
         vehicle_number=booking.vehicle_number or "TN-09-SP-2026",
         amount=refund_amt,
         status=refund_status_val
     )
     db.add(refund_payment)
-
-    booking.refund_status = refund_status_val
-    booking.refund_id = ref_code
 
     # 3. Update slot availability (if assigned)
     target_slot_id = booking.assigned_position_id or booking.slot_id
@@ -139,18 +164,19 @@ async def process_early_exit(booking_id: int, user, db: Session) -> dict:
 
     return {
         "booking_id": booking.booking_id,
-        "status": "EARLY_EXIT",
+        "status": booking.status,
         "actual_end_time": now.isoformat(),
         "used_hours": breakdown["used_hours"],
         "used_amount": breakdown["used_amount"],
         "unused_amount": breakdown["unused_amount"],
-        "cancellation_fee": breakdown["cancellation_fee"],
-        "refund_amount": breakdown["refund_amount"],
+        "cancellation_fee": cancellation_fee,
+        "refund_amount": refund_amt,
         "booking_charge": breakdown["booking_charge"],
         "original_payment": breakdown["original_payment"],
         "earned_amount": breakdown["earned_amount"],
         "refund_status": refund_status_val,
+        "refund_type": refund_type_val,
         "refund_reference": ref_code,
         "payment_method": pay_method,
-        "message": f"Early exit processed successfully. Refund of ₹{refund_amt:.2f} issued via {pay_method}."
+        "message": msg
     }

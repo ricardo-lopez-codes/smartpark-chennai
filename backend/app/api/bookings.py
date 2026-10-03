@@ -6,7 +6,15 @@ from datetime import datetime, timezone
 from app.database.session import get_db
 from app.models.user import User
 from app.models.booking import Booking
-from app.schemas.booking import BookingCreate, BookingResponse, BookingExtend, BookingCancelResponse, EarlyExitPreviewResponse, EarlyExitResponse
+from app.schemas.booking import (
+    BookingCreate,
+    BookingResponse,
+    BookingExtend,
+    BookingCancelResponse,
+    EarlyExitPreviewResponse,
+    EarlyExitRequest,
+    EarlyExitResponse
+)
 from app.services.auth import get_current_user
 from app.services.booking_service import (
     create_booking,
@@ -141,14 +149,19 @@ async def preview_early_exit(
 @router.post("/{id}/early-exit", response_model=EarlyExitResponse)
 async def execute_early_exit(
     id: int,
+    payload: Optional[EarlyExitRequest] = None,
+    refund_option: Optional[str] = Query(None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    Feature 6: End parking session early, process partial refund, store payment reference.
+    Feature 6 + Wallet: End parking session early with refund selection.
+    Option 1: CASH / ORIGINAL_PAYMENT (with 30% cancellation fee)
+    Option 2: WALLET (100% full refund with 0% cancellation fee credited to PARK-A-LOT Wallet)
     """
+    selected_option = payload.refund_option if (payload and payload.refund_option) else (refund_option or "WALLET")
     from app.services.early_exit_service import process_early_exit
-    return await process_early_exit(booking_id=id, user=current_user, db=db)
+    return await process_early_exit(booking_id=id, user=current_user, db=db, refund_option=selected_option)
 
 @router.post("/{id}/cancel", response_model=BookingCancelResponse)
 async def cancel_booking_endpoint(

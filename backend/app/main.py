@@ -62,7 +62,12 @@ def run_db_migrations():
         ("bookings", "cancellation_fee FLOAT"),
         ("bookings", "refund_amount FLOAT"),
         ("bookings", "refund_status VARCHAR DEFAULT 'NONE'"),
+        ("bookings", "refund_type VARCHAR DEFAULT 'ORIGINAL_PAYMENT'"),
         ("bookings", "refund_id VARCHAR"),
+        ("bookings", "credits_earned INTEGER DEFAULT 0"),
+
+        ("users", "wallet_balance FLOAT DEFAULT 0.0"),
+        ("users", "wallet_credits INTEGER DEFAULT 0"),
 
         ("payments", "payment_method VARCHAR DEFAULT 'RAZORPAY'"),
         ("payments", "transaction_reference VARCHAR"),

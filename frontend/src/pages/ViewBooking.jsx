@@ -22,6 +22,7 @@ export default function ViewBooking() {
   const [earlyExitPreview, setEarlyExitPreview] = useState(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [processingExit, setProcessingExit] = useState(false);
+  const [selectedRefundOption, setSelectedRefundOption] = useState('WALLET'); // 'WALLET' or 'ORIGINAL_PAYMENT'
 
   const { fetchActiveBooking } = useBooking();
   const { addNotification } = useNotification();
@@ -134,10 +135,10 @@ export default function ViewBooking() {
   const handleConfirmEarlyExit = async () => {
     setProcessingExit(true);
     try {
-      const res = await api.post(`/bookings/${id}/early-exit`);
+      const res = await api.post(`/bookings/${id}/early-exit`, { refund_option: selectedRefundOption });
       addNotification({
         title: '✓ EARLY EXIT CONFIRMED',
-        message: `Refund of ${formatCurrency(res.data.refund_amount)} processed via ${res.data.payment_method}. Reference: ${res.data.refund_reference}`,
+        message: res.data.message || `Refund of ${formatCurrency(res.data.refund_amount)} processed. Reference: ${res.data.refund_reference}`,
         type: 'success',
         duration: 9000
       });
@@ -404,48 +405,85 @@ export default function ViewBooking() {
             {loadingPreview ? (
               <div className="py-8 text-center space-y-2">
                 <div className="w-8 h-8 rounded-full border-4 border-amber-400 border-t-transparent animate-spin mx-auto" />
-                <p className="text-xs text-slate-500 font-bold">Calculating server refund breakdown...</p>
+                <p className="text-xs text-slate-500 font-bold">Calculating server refund options...</p>
               </div>
             ) : earlyExitPreview ? (
               <div className="space-y-4">
-                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2 text-xs font-medium">
+                
+                {/* Unused Time Summary */}
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-1.5 text-xs font-medium">
                   <div className="flex justify-between">
-                    <span className="text-slate-500">Booked until:</span>
-                    <span className="font-bold text-slate-900">{earlyExitPreview.booked_until}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Current time:</span>
-                    <span className="font-bold text-slate-900">{earlyExitPreview.current_time}</span>
-                  </div>
-                  <div className="flex justify-between border-t border-slate-200 pt-2">
-                    <span className="text-slate-500">Remaining time:</span>
-                    <span className="font-bold text-blue-700">{earlyExitPreview.unused_hours} hours</span>
+                    <span className="text-slate-500">Booked until: {earlyExitPreview.booked_until}</span>
+                    <span className="font-bold text-blue-700">Remaining: {earlyExitPreview.unused_hours} hours</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500">Unused parking amount:</span>
-                    <span className="font-bold text-slate-900">{formatCurrency(earlyExitPreview.unused_amount)}</span>
-                  </div>
-                  <div className="flex justify-between text-rose-700">
-                    <span>Cancellation fee (30%):</span>
-                    <span className="font-bold">-{formatCurrency(earlyExitPreview.cancellation_fee)}</span>
-                  </div>
-                  <div className="flex justify-between pt-2 border-t border-slate-200 text-base font-black text-emerald-700">
-                    <span>Refund amount:</span>
-                    <span>{formatCurrency(earlyExitPreview.refund_amount)}</span>
+                    <span className="font-extrabold text-slate-900">{formatCurrency(earlyExitPreview.unused_amount)}</span>
                   </div>
                 </div>
 
-                <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-900 font-medium leading-relaxed">
-                  <strong>Notice:</strong> The original service charge ({formatCurrency(earlyExitPreview.booking_charge)}) is non-refundable. The 30% cancellation fee applies only to unused parking time.
-                </div>
+                {/* Refund Method Selector Title */}
+                <span className="text-xs font-extrabold text-slate-800 block">Select Refund Method:</span>
 
-                <div className="flex items-center gap-3">
+                {/* OPTION 2: FULL WALLET REFUND (RECOMMENDED) */}
+                <button
+                  type="button"
+                  onClick={() => setSelectedRefundOption('WALLET')}
+                  className={`w-full p-4 rounded-2xl border text-left transition-all flex items-start gap-3 relative ${
+                    selectedRefundOption === 'WALLET'
+                      ? 'bg-emerald-50/90 border-emerald-500 ring-2 ring-emerald-500/20 shadow-sm'
+                      : 'bg-white border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <span className="absolute top-2.5 right-3 px-2 py-0.5 rounded-md bg-emerald-600 text-white font-black text-[9px] uppercase tracking-wider">
+                    Recommended • 0% Fee
+                  </span>
+                  <div className={`p-2.5 rounded-xl shrink-0 ${selectedRefundOption === 'WALLET' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                    💳
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="font-black text-xs text-slate-900">Option 2: Full Wallet Refund (100% Refund)</h4>
+                    <p className="text-[11px] text-slate-600 font-medium">
+                      Zero cancellation fee! Get full <strong>{formatCurrency(earlyExitPreview.wallet_refund_amount || earlyExitPreview.unused_amount)}</strong> credited to your PARK-A-LOT Wallet.
+                    </p>
+                    <div className="text-[10px] text-emerald-800 font-bold flex items-center gap-1 pt-0.5">
+                      <span>✓ 0% Cancellation Fee</span>
+                      <span>• Instant Wallet Credit</span>
+                    </div>
+                  </div>
+                </button>
+
+                {/* OPTION 1: CASH / ORIGINAL PAYMENT REFUND */}
+                <button
+                  type="button"
+                  onClick={() => setSelectedRefundOption('ORIGINAL_PAYMENT')}
+                  className={`w-full p-4 rounded-2xl border text-left transition-all flex items-start gap-3 ${
+                    selectedRefundOption === 'ORIGINAL_PAYMENT'
+                      ? 'bg-amber-50/90 border-amber-500 ring-2 ring-amber-500/20 shadow-sm'
+                      : 'bg-white border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <div className={`p-2.5 rounded-xl shrink-0 ${selectedRefundOption === 'ORIGINAL_PAYMENT' ? 'bg-amber-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                    💵
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="font-black text-xs text-slate-900">Option 1: Cash / Original Payment Refund</h4>
+                    <p className="text-[11px] text-slate-600 font-medium">
+                      Standard refund with 30% cancellation fee ({formatCurrency(earlyExitPreview.cash_cancellation_fee || earlyExitPreview.cancellation_fee)}).
+                    </p>
+                    <div className="text-[10px] text-slate-700 font-extrabold pt-0.5">
+                      Refund Amount: <strong className="text-amber-900">{formatCurrency(earlyExitPreview.cash_refund_amount || earlyExitPreview.refund_amount)}</strong> (30% fee applies)
+                    </div>
+                  </div>
+                </button>
+
+                <div className="flex items-center gap-3 pt-2">
                   <button
                     disabled={processingExit}
                     onClick={handleConfirmEarlyExit}
-                    className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-xs transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
+                    className="w-full py-3.5 rounded-xl bg-[#171717] hover:bg-slate-800 text-[#FFD21F] font-extrabold text-xs shadow-xs transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
                   >
-                    {processingExit ? 'Processing Refund...' : 'Confirm Early Exit'}
+                    {processingExit ? 'Processing Refund...' : `Confirm Early Exit (${selectedRefundOption === 'WALLET' ? 'Full Wallet Refund' : 'Cash Refund'})`}
                   </button>
                   <button
                     disabled={processingExit}

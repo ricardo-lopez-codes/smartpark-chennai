@@ -6,10 +6,40 @@ export const formatCurrency = (amount) => {
   }).format(amount);
 };
 
+export const parseCleanDate = (isoString) => {
+  if (!isoString) return new Date();
+  if (isoString instanceof Date) return isoString;
+  
+  let cleanStr = String(isoString).trim();
+  // Strip trailing Z or +00:00 / +05:30 offset specifiers so Javascript parses exact wall-clock time
+  cleanStr = cleanStr.replace(/Z$/, '').replace(/\+00:00$/, '').replace(/\+05:30$/, '').replace(/T/, ' ');
+  
+  const d = new Date(cleanStr);
+  if (!isNaN(d.getTime())) return d;
+  return new Date(isoString);
+};
+
 export const formatTime = (isoString) => {
   if (!isoString) return '--:--';
-  const date = new Date(isoString);
-  return date.toLocaleTimeString('en-US', {
+
+  let cleanStr = String(isoString).trim();
+  // If it's a simple HH:MM time string like "20:00" or "08:30"
+  if (cleanStr.includes(':') && !cleanStr.includes('T') && !cleanStr.includes(' ')) {
+    const parts = cleanStr.split(':').map(Number);
+    if (parts.length >= 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+      const h = parts[0];
+      const m = parts[1];
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      const displayH = h % 12 === 0 ? 12 : h % 12;
+      const displayM = m < 10 ? `0${m}` : `${m}`;
+      return `${displayH}:${displayM} ${ampm}`;
+    }
+  }
+
+  const d = parseCleanDate(isoString);
+  if (isNaN(d.getTime())) return '--:--';
+
+  return d.toLocaleTimeString('en-US', {
     hour: '2-digit',
     minute: '2-digit',
     hour12: true
@@ -18,8 +48,9 @@ export const formatTime = (isoString) => {
 
 export const formatDate = (isoString) => {
   if (!isoString) return '';
-  const date = new Date(isoString);
-  return date.toLocaleDateString('en-US', {
+  const d = parseCleanDate(isoString);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric'

@@ -15,19 +15,21 @@ def generate_booking_id() -> str:
 
 def format_booking_response(booking: Booking, now: datetime = None) -> dict:
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now()
+        if now.tzinfo is not None:
+            now = now.replace(tzinfo=None)
     
     start_t = booking.start_time
-    if start_t.tzinfo is None:
-        start_t = start_t.replace(tzinfo=timezone.utc)
+    if start_t and start_t.tzinfo is not None:
+        start_t = start_t.replace(tzinfo=None)
         
     paid_end_t = booking.paid_end_time
-    if paid_end_t.tzinfo is None:
-        paid_end_t = paid_end_t.replace(tzinfo=timezone.utc)
+    if paid_end_t and paid_end_t.tzinfo is not None:
+        paid_end_t = paid_end_t.replace(tzinfo=None)
         
     buffer_end_t = booking.buffer_end_time
-    if buffer_end_t.tzinfo is None:
-        buffer_end_t = buffer_end_t.replace(tzinfo=timezone.utc)
+    if buffer_end_t and buffer_end_t.tzinfo is not None:
+        buffer_end_t = buffer_end_t.replace(tzinfo=None)
 
     # Dynamic status calculation based on current timestamp
     if booking.status in ["UPCOMING", "ACTIVE", "EXTENDED"]:
@@ -55,8 +57,8 @@ def format_booking_response(booking: Booking, now: datetime = None) -> dict:
         slot_num = booking.slot.slot_number
 
     grace_end_t = booking.grace_end_time or (paid_end_t + timedelta(minutes=15))
-    if grace_end_t.tzinfo is None:
-        grace_end_t = grace_end_t.replace(tzinfo=timezone.utc)
+    if grace_end_t and grace_end_t.tzinfo is not None:
+        grace_end_t = grace_end_t.replace(tzinfo=None)
 
     return {
         "id": booking.id,
@@ -95,7 +97,9 @@ def format_booking_response(booking: Booking, now: datetime = None) -> dict:
         "cancellation_fee": booking.cancellation_fee,
         "refund_amount": booking.refund_amount,
         "refund_status": booking.refund_status or "NONE",
+        "refund_type": getattr(booking, 'refund_type', "ORIGINAL_PAYMENT") or "ORIGINAL_PAYMENT",
         "refund_id": booking.refund_id,
+        "credits_earned": getattr(booking, 'credits_earned', 0) or 0,
         "payment_id": booking.payment_id,
         "created_at": booking.created_at,
         "latitude": booking.parking_lot.latitude if booking.parking_lot else 13.0,
@@ -159,14 +163,16 @@ async def create_booking(
             detail="This parking lot is currently undergoing owner verification and is not yet open for public bookings."
         )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now()
+    if now.tzinfo is not None:
+        now = now.replace(tzinfo=None)
 
     # Parse Date & Time
     if booking_date_str and start_time_str:
         try:
             date_parts = [int(x) for x in booking_date_str.split("-")]
             time_parts = [int(x) for x in start_time_str.split(":")]
-            start_t = datetime(date_parts[0], date_parts[1], date_parts[2], time_parts[0], time_parts[1], tzinfo=timezone.utc)
+            start_t = datetime(date_parts[0], date_parts[1], date_parts[2], time_parts[0], time_parts[1])
         except Exception:
             start_t = now
             booking_date_str = now.strftime("%Y-%m-%d")
@@ -203,6 +209,24 @@ async def create_booking(
     booking_charge_val = 10.0
     total_amount = parking_fee + booking_charge_val
 
+    # Credit rewards: 1 hour = 10 credits (e.g. 3 hours = 30 credits)
+    earned_credits = duration_hours * 10
+
+    # If WALLET payment method selected, verify and deduct balance
+    pay_method = (payment_method or "RAZORPAY").upper().strip()
+    if pay_method == "WALLET":
+        current_bal = float(user.wallet_balance or 0.0)
+        if current_bal < total_amount:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Insufficient wallet balance. Available balance is ₹{current_bal:.2f}, but total payable amount is ₹{total_amount:.2f}."
+            )
+        user.wallet_balance = round(current_bal - total_amount, 2)
+
+    # Award reward credits & add credit value to wallet
+    user.wallet_credits = (user.wallet_credits or 0) + earned_credits
+    user.wallet_balance = round((user.wallet_balance or 0.0) + float(earned_credits), 2)
+
     b_id = generate_booking_id()
     booking_status = "UPCOMING" if start_t > now + timedelta(minutes=5) else "ACTIVE"
 
@@ -210,11 +234,11 @@ async def create_booking(
         booking_id=b_id,
         user_id=user.id,
         parking_lot_id=lot.id,
-        slot_id=target_slot.id if target_slot else 0,
-        assigned_position_id=target_slot.id if target_slot else None,
-        assigned_position_name=target_slot.slot_number if target_slot else None,
+        slot_id=0,
+        assigned_position_id=None,
+        assigned_position_name=None,
         vehicle_number=vehicle_number or user.vehicle_number or "TN-09-SP-2026",
-        payment_method=payment_method or "RAZORPAY",
+        payment_method=pay_method,
         booking_date=booking_date_str,
         duration_hours=duration_hours,
         start_time=start_t,
@@ -225,15 +249,13 @@ async def create_booking(
         overstay_status="NONE",
         amount=total_amount,
         booking_charge=booking_charge_val,
+        credits_earned=earned_credits,
         payment_id=f"pay_{b_id.lower()}"
     )
 
     db.add(booking)
     db.commit()
     db.refresh(booking)
-
-    if target_slot and booking_status == "ACTIVE":
-        await update_slot_sensor_status(db, target_slot.id, "reserved")
 
     return booking
 
