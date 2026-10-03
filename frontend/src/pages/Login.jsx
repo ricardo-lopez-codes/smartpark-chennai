@@ -9,19 +9,24 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login, demoLogin } = useAuth();
+  const { login } = useAuth();
   const { addNotification } = useNotification();
   const navigate = useNavigate();
 
   const handleDemoClick = async (role) => {
+    const targetEmail = role === 'owner' ? 'owner@smartpark.in' : 'demo@smartpark.in';
+    const targetPassword = 'demopassword';
+    setEmail(targetEmail);
+    setPassword(targetPassword);
+
     setLoading(true);
-    const res = await demoLogin(role);
+    const res = await login(targetEmail, targetPassword);
     setLoading(false);
 
     if (res.success) {
       addNotification({
         title: 'Hackathon Demo Access',
-        message: `Authenticated via backend as ${role === 'owner' ? 'Owner Demo (PARK-A-LOT Demo Parking)' : 'Civilian Demo'}`,
+        message: `Logged in via POST /api/auth/login as ${role === 'owner' ? 'Owner Demo (PARK-A-LOT Demo Parking)' : 'Civilian Demo'}`,
         type: 'success'
       });
       if (res.user && res.user.role === 'owner') {
@@ -31,7 +36,7 @@ export default function Login() {
       }
     } else {
       addNotification({
-        title: 'Demo Access Failure',
+        title: 'Authentication Failure',
         message: res.error,
         type: 'error'
       });
