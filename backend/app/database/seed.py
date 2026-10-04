@@ -63,14 +63,14 @@ def seed_db():
                 phone="+91 98765 99999",
                 password_hash=get_password_hash("demopassword"),
                 vehicle_number="N/A (ESP32 Gateway)",
-                role="owner"
+                role="esp32"
             )
             db.add(esp32_user)
             db.commit()
             db.refresh(esp32_user)
         else:
             esp32_user.password_hash = get_password_hash("demopassword")
-            esp32_user.role = "owner"
+            esp32_user.role = "esp32"
             db.commit()
 
         # 3. Fallback Civilian & Government Accounts

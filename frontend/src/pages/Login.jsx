@@ -38,8 +38,10 @@ export default function Login() {
         }`,
         type: 'success'
       });
-      if (res.user && (res.user.role === 'owner' || res.user.email === 'esp32@smartpark.in')) {
-        navigate(role === 'esp32' ? '/owner/esp32-config' : '/owner');
+      if (res.user && (res.user.role === 'esp32' || res.user.email === 'esp32@smartpark.in')) {
+        navigate('/owner/esp32-config');
+      } else if (res.user && res.user.role === 'owner') {
+        navigate('/owner');
       } else {
         navigate('/');
       }
@@ -75,7 +77,9 @@ export default function Login() {
       });
       
       // Role-based authorization route strictly from backend JWT user record
-      if (res.user && res.user.role === 'owner') {
+      if (res.user && (res.user.role === 'esp32' || res.user.email === 'esp32@smartpark.in')) {
+        navigate('/owner/esp32-config');
+      } else if (res.user && res.user.role === 'owner') {
         navigate('/owner');
       } else {
         navigate('/');

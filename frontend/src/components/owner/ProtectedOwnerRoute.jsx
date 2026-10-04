@@ -21,7 +21,7 @@ export default function ProtectedOwnerRoute({ children }) {
     return <Navigate to="/login" replace />;
   }
 
-  if (user.role !== 'owner') {
+  if (user.role !== 'owner' && user.role !== 'esp32') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F7F7F7] p-4">
         <div className="max-w-md w-full p-8 rounded-3xl bg-white border border-slate-200 shadow-xl text-center space-y-4">

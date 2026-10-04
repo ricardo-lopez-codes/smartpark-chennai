@@ -18,10 +18,10 @@ from app.schemas.owner import (
 router = APIRouter(prefix="/owner", tags=["Owner Portal"])
 
 def get_owner_lot(db: Session, user: User) -> ParkingLot:
-    if user.role != "owner":
+    if user.role not in ["owner", "esp32"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied. Owner role authorization required."
+            detail="Access denied. Owner or ESP32 role authorization required."
         )
     
     lot = db.query(ParkingLot).filter(ParkingLot.owner_id == user.id).first()

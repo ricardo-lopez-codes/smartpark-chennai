@@ -52,6 +52,7 @@ const ProtectedCivilianRoute = ({ children }) => {
   }
   if (!user) return <Navigate to="/login" replace />;
   if (user.role === 'owner') return <Navigate to="/owner" replace />;
+  if (user.role === 'esp32' || user.email === 'esp32@smartpark.in') return <Navigate to="/owner/esp32-config" replace />;
   return children;
 };
 
