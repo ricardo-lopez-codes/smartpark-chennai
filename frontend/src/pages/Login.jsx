@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Car, Mail, Lock, LogIn, X, KeyRound, CheckCircle2 } from 'lucide-react';
+import { Car, Mail, Lock, LogIn, X, KeyRound, CheckCircle2, Cpu } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
 import api from '../services/api';
@@ -14,7 +14,10 @@ export default function Login() {
   const navigate = useNavigate();
 
   const handleDemoClick = async (role) => {
-    const targetEmail = role === 'owner' ? 'owner@smartpark.in' : 'demo@smartpark.in';
+    let targetEmail = 'demo@smartpark.in';
+    if (role === 'owner') targetEmail = 'owner@smartpark.in';
+    else if (role === 'esp32') targetEmail = 'esp32@smartpark.in';
+
     const targetPassword = 'demopassword';
     setEmail(targetEmail);
     setPassword(targetPassword);
@@ -26,11 +29,17 @@ export default function Login() {
     if (res.success) {
       addNotification({
         title: 'Hackathon Demo Access',
-        message: `Logged in via POST /api/auth/login as ${role === 'owner' ? 'Owner Demo (PARK-A-LOT Demo Parking)' : 'Civilian Demo'}`,
+        message: `Logged in via POST /api/auth/login as ${
+          role === 'esp32'
+            ? 'ESP32 Hardware Demo (Live LoRa Sensor)'
+            : role === 'owner'
+            ? 'Owner Demo (PARK-A-LOT Demo Parking)'
+            : 'Civilian Demo'
+        }`,
         type: 'success'
       });
-      if (res.user && res.user.role === 'owner') {
-        navigate('/owner');
+      if (res.user && (res.user.role === 'owner' || res.user.email === 'esp32@smartpark.in')) {
+        navigate(role === 'esp32' ? '/owner/esp32-config' : '/owner');
       } else {
         navigate('/');
       }
@@ -239,52 +248,79 @@ export default function Login() {
           </span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-          {/* Civilian Demo Option */}
-          <div className="p-3.5 rounded-2xl bg-white border border-amber-200/60 flex flex-col justify-between space-y-2.5">
-            <div>
-              <div className="font-extrabold text-[#171717] flex items-center justify-between">
-                <span>Civilian Demo</span>
-                <span className="text-[10px] text-slate-400 font-medium">Role: civilian</span>
+        <div className="space-y-3 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Civilian Demo Option */}
+            <div className="p-3.5 rounded-2xl bg-white border border-amber-200/60 flex flex-col justify-between space-y-2.5">
+              <div>
+                <div className="font-extrabold text-[#171717] flex items-center justify-between">
+                  <span>Civilian Demo</span>
+                  <span className="text-[10px] text-slate-400 font-medium">Role: civilian</span>
+                </div>
+                <div className="text-[11px] text-slate-500 mt-1 font-mono">
+                  email: <strong className="text-slate-800">demo@smartpark.in</strong>
+                </div>
+                <div className="text-[11px] text-slate-500 font-mono">
+                  password: <span className="text-slate-800 font-semibold">demopassword</span>
+                </div>
               </div>
-              <div className="text-[11px] text-slate-500 mt-1 font-mono">
-                email: <strong className="text-slate-800">demo@smartpark.in</strong>
-              </div>
-              <div className="text-[11px] text-slate-500 font-mono">
-                password: <span className="text-slate-800 font-semibold">demopassword</span>
-              </div>
+              <button
+                type="button"
+                onClick={() => handleDemoClick('civilian')}
+                disabled={loading}
+                className="w-full py-2 px-3 rounded-xl bg-[#171717] hover:bg-slate-800 text-white text-[11px] font-extrabold transition-all shadow-xs flex items-center justify-center gap-1.5"
+              >
+                Use Civilian Demo
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => handleDemoClick('civilian')}
-              disabled={loading}
-              className="w-full py-2 px-3 rounded-xl bg-[#171717] hover:bg-slate-800 text-white text-[11px] font-extrabold transition-all shadow-xs flex items-center justify-center gap-1.5"
-            >
-              Use Civilian Demo
-            </button>
+
+            {/* Owner Demo Option */}
+            <div className="p-3.5 rounded-2xl bg-white border border-amber-200/60 flex flex-col justify-between space-y-2.5">
+              <div>
+                <div className="font-extrabold text-[#171717] flex items-center justify-between">
+                  <span>Owner Demo</span>
+                  <span className="text-[10px] text-slate-400 font-medium">Role: owner</span>
+                </div>
+                <div className="text-[11px] text-slate-500 mt-1 font-mono">
+                  email: <strong className="text-slate-800">owner@smartpark.in</strong>
+                </div>
+                <div className="text-[11px] text-slate-500 font-mono">
+                  password: <span className="text-slate-800 font-semibold">demopassword</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleDemoClick('owner')}
+                disabled={loading}
+                className="w-full py-2 px-3 rounded-xl bg-[#FFD21F] hover:bg-[#E5B800] text-[#171717] text-[11px] font-extrabold transition-all shadow-xs flex items-center justify-center gap-1.5"
+              >
+                Use Owner Demo
+              </button>
+            </div>
           </div>
 
-          {/* Owner Demo Option */}
-          <div className="p-3.5 rounded-2xl bg-white border border-amber-200/60 flex flex-col justify-between space-y-2.5">
+          {/* NEW: Demo ESP32 Integration Option */}
+          <div className="p-3.5 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-900 to-slate-800 text-white border border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
             <div>
-              <div className="font-extrabold text-[#171717] flex items-center justify-between">
-                <span>Owner Demo</span>
-                <span className="text-[10px] text-slate-400 font-medium">Role: owner</span>
+              <div className="font-extrabold text-[#FFD21F] flex items-center gap-2">
+                <Cpu className="w-4 h-4 text-[#FFD21F]" />
+                <span>Demo ESP32 Integration</span>
+                <span className="text-[9px] font-bold text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded-full border border-emerald-800">
+                  Live Hardware A1
+                </span>
               </div>
-              <div className="text-[11px] text-slate-500 mt-1 font-mono">
-                email: <strong className="text-slate-800">owner@smartpark.in</strong>
-              </div>
-              <div className="text-[11px] text-slate-500 font-mono">
-                password: <span className="text-slate-800 font-semibold">demopassword</span>
-              </div>
+              <p className="text-[11px] text-slate-300 font-medium mt-0.5">
+                Real ESP32 LoRa Sensor • <code className="text-amber-300 font-mono">esp32@smartpark.in</code>
+              </p>
             </div>
             <button
               type="button"
-              onClick={() => handleDemoClick('owner')}
+              onClick={() => handleDemoClick('esp32')}
               disabled={loading}
-              className="w-full py-2 px-3 rounded-xl bg-[#FFD21F] hover:bg-[#E5B800] text-[#171717] text-[11px] font-extrabold transition-all shadow-xs flex items-center justify-center gap-1.5"
+              className="py-2.5 px-4 rounded-xl bg-[#FFD21F] hover:bg-[#E5B800] text-[#171717] text-xs font-extrabold transition-all shadow-xs flex items-center justify-center gap-1.5 shrink-0"
             >
-              Use Owner Demo
+              <Cpu className="w-3.5 h-3.5" />
+              Use ESP32 Demo
             </button>
           </div>
         </div>

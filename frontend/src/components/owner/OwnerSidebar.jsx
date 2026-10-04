@@ -29,10 +29,13 @@ export default function OwnerSidebar({ mobileOpen, setMobileOpen, unreadNotifsCo
     navigate('/login');
   };
 
+  const isEsp32Demo = user?.email === 'esp32@smartpark.in';
+
   const navItems = [
     { label: 'Overview', icon: LayoutDashboard, path: '/owner', end: true },
     { label: 'Facility Verification', icon: ShieldCheck, path: '/owner/verification' },
     { label: 'Live Parking', icon: Grid, path: '/owner/live-parking' },
+    ...(isEsp32Demo ? [{ label: 'ESP32 Configuration', icon: Cpu, path: '/owner/esp32-config' }] : []),
     { label: 'Bookings', icon: CalendarCheck, path: '/owner/bookings' },
     { label: 'Calendar', icon: Calendar, path: '/owner/calendar' },
     { label: 'Revenue', icon: IndianRupee, path: '/owner/revenue' },

@@ -54,6 +54,25 @@ def seed_db():
             owner_user.role = "owner"
             db.commit()
 
+        # 3. ESP32 Hardware Integration Demo Account
+        esp32_user = db.query(User).filter(User.email == "esp32@smartpark.in").first()
+        if not esp32_user:
+            esp32_user = User(
+                name="ESP32 Integration Demo",
+                email="esp32@smartpark.in",
+                phone="+91 98765 99999",
+                password_hash=get_password_hash("demopassword"),
+                vehicle_number="N/A (ESP32 Gateway)",
+                role="owner"
+            )
+            db.add(esp32_user)
+            db.commit()
+            db.refresh(esp32_user)
+        else:
+            esp32_user.password_hash = get_password_hash("demopassword")
+            esp32_user.role = "owner"
+            db.commit()
+
         # 3. Fallback Civilian & Government Accounts
         civilian = db.query(User).filter(User.email == "civilian@smartpark.com").first()
         if not civilian:

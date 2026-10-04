@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Layers, Plus, Edit2, Wrench, CheckCircle, XCircle, Search, X, Cpu } from 'lucide-react';
 import api from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 import { useNotification } from '../../context/NotificationContext';
 
 export default function OwnerSlots() {
+  const { user } = useAuth();
+  const isEsp32Demo = user?.email === 'esp32@smartpark.in';
+
   const [slots, setSlots] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -92,7 +96,28 @@ export default function OwnerSlots() {
     }
   };
 
-  const filteredSlots = slots.filter(s => {
+  let displaySlots = slots;
+  if (isEsp32Demo) {
+    const a1Only = slots.filter(s => s.slot_number === 'A1');
+    if (a1Only.length > 0) {
+      displaySlots = a1Only;
+    } else {
+      displaySlots = [
+        {
+          id: 1,
+          slot_number: 'A1',
+          slot_type: 'Car',
+          zone: 'Zone A (ESP32 Bay)',
+          floor: 'Ground Floor',
+          price_per_hour: 40,
+          status: 'available',
+          sensor_id: 'ESP32-LORA-433'
+        }
+      ];
+    }
+  }
+
+  const filteredSlots = displaySlots.filter(s => {
     if (!search) return true;
     const term = search.toLowerCase();
     return s.slot_number.toLowerCase().includes(term) || (s.sensor_id || '').toLowerCase().includes(term);

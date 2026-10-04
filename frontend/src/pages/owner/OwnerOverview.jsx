@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { fetchESP32Data, getStoredESP32Url } from '../../services/esp32Service';
 
 function OverstayAlertSection() {
   const [alerts, setAlerts] = useState([]);
@@ -106,9 +107,12 @@ function OverstayAlertSection() {
 
 export default function OwnerOverview() {
   const { user } = useAuth();
+  const isEsp32Demo = user?.email === 'esp32@smartpark.in';
+
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [esp32Status, setEsp32Status] = useState('UNKNOWN');
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -137,6 +141,26 @@ export default function OwnerOverview() {
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    if (isEsp32Demo) {
+      let active = true;
+      const pollESP32 = async () => {
+        const res = await fetchESP32Data(getStoredESP32Url());
+        if (active && res.connected) {
+          setEsp32Status(res.slotStatus || 'UNKNOWN');
+        } else if (active) {
+          setEsp32Status('UNKNOWN');
+        }
+      };
+      pollESP32();
+      const interval = setInterval(pollESP32, 1000);
+      return () => {
+        active = false;
+        clearInterval(interval);
+      };
+    }
+  }, [isEsp32Demo]);
+
   if (loading && !data) {
     return (
       <div className="py-20 text-center space-y-3">
@@ -162,14 +186,15 @@ export default function OwnerOverview() {
   }
 
   // Real Database Metrics (or default zero values if new empty lot)
-  const totalSlots = data?.total_slots || 0;
-  const availableSlots = data?.available_slots ?? totalSlots;
-  const occupiedSlots = data?.occupied_slots || 0;
-  const reservedSlots = data?.reserved_slots || 0;
+  const isOccupiedEsp = esp32Status === 'OCCUPIED';
+  const totalSlots = isEsp32Demo ? 1 : (data?.total_slots || 0);
+  const occupiedSlots = isEsp32Demo ? (isOccupiedEsp ? 1 : 0) : (data?.occupied_slots || 0);
+  const availableSlots = isEsp32Demo ? (isOccupiedEsp ? 0 : 1) : (data?.available_slots ?? totalSlots);
+  const reservedSlots = isEsp32Demo ? 0 : (data?.reserved_slots || 0);
   const todayRevenue = data?.today_revenue || 0;
   const todayBookingsCount = data?.today_bookings_count || 0;
-  const occupancyPct = data?.occupancy_percent || 0;
-  const lotName = data?.company_name || 'My Parking Facility';
+  const occupancyPct = isEsp32Demo ? (isOccupiedEsp ? 100 : 0) : (data?.occupancy_percent || 0);
+  const lotName = isEsp32Demo ? 'PARK-A-LOT (ESP32 LoRa Demo Node)' : (data?.company_name || 'My Parking Facility');
   const isOpen = data?.is_open ?? true;
 
   return (

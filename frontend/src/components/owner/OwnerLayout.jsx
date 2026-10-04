@@ -75,6 +75,7 @@ export default function OwnerLayout({ children }) {
   const getPageTitle = () => {
     const path = location.pathname;
     if (path === '/owner') return 'Overview Dashboard';
+    if (path.includes('/esp32-config')) return 'ESP32 Hardware Configuration';
     if (path.includes('/live-parking')) return 'Live Parking Occupancy';
     if (path.includes('/bookings')) return 'Parking Bookings';
     if (path.includes('/calendar')) return 'Schedule & Occupancy Calendar';

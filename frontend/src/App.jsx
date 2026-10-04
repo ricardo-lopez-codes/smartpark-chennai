@@ -39,6 +39,7 @@ import OwnerNotifications from './pages/owner/OwnerNotifications';
 import OwnerLotSettings from './pages/owner/OwnerLotSettings';
 import OwnerAccount from './pages/owner/OwnerAccount';
 import OwnerVerification from './pages/owner/OwnerVerification';
+import OwnerESP32Config from './pages/owner/OwnerESP32Config';
 
 const ProtectedCivilianRoute = ({ children }) => {
   const { user, loading } = useAuth();
@@ -65,6 +66,7 @@ const AppContent = () => {
           <OwnerLayout>
             <Routes>
               <Route path="/owner" element={<OwnerOverview />} />
+              <Route path="/owner/esp32-config" element={<OwnerESP32Config />} />
               <Route path="/owner/verification" element={<OwnerVerification />} />
               <Route path="/owner/live-parking" element={<OwnerLiveParking />} />
               <Route path="/owner/bookings" element={<OwnerBookings />} />
