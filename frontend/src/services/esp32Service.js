@@ -1,8 +1,35 @@
 // ESP32 Hardware Integration Service
-// Communicates directly with ESP32 receiver Wi-Fi Gateway (e.g. http://192.168.4.1)
+// Supports Cloud HTTPS Mode (Render FastAPI) and Direct Local IP Mode
+
+import api from './api';
 
 const STORAGE_KEY = 'smartpark_esp32_url';
+const MODE_KEY = 'smartpark_esp32_mode';
 export const DEFAULT_ESP32_URL = 'http://192.168.4.1';
+
+/**
+ * Gets the current connection mode ('cloud' or 'local'). Defaults to 'cloud'.
+ */
+export function getESP32ConnectionMode() {
+  try {
+    return localStorage.getItem(MODE_KEY) || 'cloud';
+  } catch (err) {
+    return 'cloud';
+  }
+}
+
+/**
+ * Saves the connection mode to localStorage ('cloud' or 'local').
+ */
+export function saveESP32ConnectionMode(mode) {
+  const validMode = mode === 'local' ? 'local' : 'cloud';
+  try {
+    localStorage.setItem(MODE_KEY, validMode);
+  } catch (err) {
+    console.warn('Failed to save ESP32 connection mode to localStorage:', err);
+  }
+  return validMode;
+}
 
 /**
  * Normalizes input URL strings so http:// or https:// is present, trailing slashes removed.
@@ -47,9 +74,88 @@ export function saveStoredESP32Url(url) {
 }
 
 /**
- * Tests connection to GET {baseUrl}/health
+ * Queries FastAPI backend for Cloud IoT Telemetry & 90-second offline calculation
+ */
+export async function fetchCloudESP32Data(deviceId = 'PARK-ESP32-001') {
+  try {
+    const res = await api.get(`/iot/status?device_id=${encodeURIComponent(deviceId)}`);
+    const data = res.data;
+
+    const isOnline = Boolean(data.online);
+    const rawStatus = (data.status || 'UNKNOWN').toUpperCase();
+
+    let slotStatus = 'SENSOR OFFLINE';
+    if (!isOnline) {
+      slotStatus = 'SENSOR OFFLINE';
+    } else if (rawStatus === 'OCCUPIED') {
+      slotStatus = 'OCCUPIED';
+    } else if (rawStatus === 'EMPTY' || rawStatus === 'AVAILABLE') {
+      slotStatus = 'AVAILABLE';
+    } else {
+      slotStatus = rawStatus;
+    }
+
+    const rssi = data.rssi !== null && data.rssi !== undefined ? `${data.rssi} dBm` : '--';
+    const snr = data.snr !== null && data.snr !== undefined ? `${data.snr} dB` : '--';
+    const packetCount = data.packet_count !== null && data.packet_count !== undefined ? data.packet_count : '--';
+    const lastUpdateMs = data.last_seen_seconds_ago !== undefined ? `${data.last_seen_seconds_ago}s ago` : '--';
+
+    return {
+      mode: 'cloud',
+      connected: isOnline,
+      online: isOnline,
+      gatewayUrl: 'Cloud API (Render)',
+      slot: data.slot || 'A1',
+      status: isOnline ? rawStatus : 'OFFLINE',
+      slotStatus: isOnline ? slotStatus : 'SENSOR OFFLINE',
+      rssi,
+      snr,
+      packetCount,
+      lastUpdateMs,
+      raw: data,
+      timestamp: Date.now()
+    };
+  } catch (err) {
+    return {
+      mode: 'cloud',
+      connected: false,
+      online: false,
+      gatewayUrl: 'Cloud API (Render)',
+      slot: 'A1',
+      status: 'OFFLINE',
+      slotStatus: 'SENSOR OFFLINE',
+      rssi: '--',
+      snr: '--',
+      packetCount: '--',
+      lastUpdateMs: '--',
+      raw: null,
+      error: 'Cloud API Connection Failure'
+    };
+  }
+}
+
+/**
+ * Tests connection to GET {baseUrl}/health (Local mode)
  */
 export async function fetchESP32Health(baseUrl = getStoredESP32Url(), timeoutMs = 2500) {
+  const mode = getESP32ConnectionMode();
+  if (mode === 'cloud') {
+    try {
+      const res = await api.get('/iot/status?device_id=PARK-ESP32-001');
+      return {
+        connected: res.data.online,
+        statusText: res.data.online ? 'ONLINE (Cloud API)' : 'SENSOR OFFLINE (>90s)',
+        raw: res.data
+      };
+    } catch (err) {
+      return {
+        connected: false,
+        statusText: 'Cloud API Offline',
+        raw: null
+      };
+    }
+  }
+
   const normalized = normalizeESP32Url(baseUrl);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -87,14 +193,15 @@ export async function fetchESP32Health(baseUrl = getStoredESP32Url(), timeoutMs 
 }
 
 /**
- * Fetches real-time slot telemetry from GET {baseUrl}/data
- * Normalizes status mapping:
- *  - "OCCUPIED" -> slotStatus: "OCCUPIED"
- *  - "EMPTY"    -> slotStatus: "AVAILABLE"
- *  - "WAITING"  -> slotStatus: "WAITING"
- *  - unknown    -> slotStatus: "UNKNOWN"
+ * Fetches real-time slot telemetry.
+ * Automatically delegates to Cloud Mode or Local IP Mode based on saved configuration.
  */
 export async function fetchESP32Data(baseUrl = getStoredESP32Url(), timeoutMs = 2500) {
+  const mode = getESP32ConnectionMode();
+  if (mode === 'cloud') {
+    return await fetchCloudESP32Data();
+  }
+
   const normalized = normalizeESP32Url(baseUrl);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -109,10 +216,11 @@ export async function fetchESP32Data(baseUrl = getStoredESP32Url(), timeoutMs = 
 
     if (!response.ok) {
       return {
+        mode: 'local',
         connected: false,
         slot: 'A1',
         status: 'OFFLINE',
-        slotStatus: 'UNKNOWN',
+        slotStatus: 'SENSOR OFFLINE',
         rssi: '--',
         snr: '--',
         packetCount: '--',
@@ -123,26 +231,20 @@ export async function fetchESP32Data(baseUrl = getStoredESP32Url(), timeoutMs = 
     }
 
     const raw = await response.json();
-
-    // Raw status parse
     const rawStatus = (raw && raw.status) ? String(raw.status).toUpperCase().trim() : 'UNKNOWN';
 
-    // Status mapping to dashboard terms
-    let slotStatus = 'UNKNOWN';
+    let slotStatus = 'SENSOR OFFLINE';
     if (rawStatus === 'OCCUPIED') {
       slotStatus = 'OCCUPIED';
-    } else if (rawStatus === 'EMPTY') {
+    } else if (rawStatus === 'EMPTY' || rawStatus === 'AVAILABLE') {
       slotStatus = 'AVAILABLE';
     } else if (rawStatus === 'WAITING') {
       slotStatus = 'WAITING';
-    } else if (rawStatus === 'AVAILABLE') {
-      slotStatus = 'AVAILABLE';
     }
 
-    // Telemetry fields with safe fallbacks
     const rssi = (raw && (raw.rssi !== undefined && raw.rssi !== null)) ? `${raw.rssi} dBm` : '--';
     const snr = (raw && (raw.snr !== undefined && raw.snr !== null)) ? `${raw.snr} dB` : '--';
-    
+
     let packetCount = '--';
     if (raw) {
       if (raw.packet_count !== undefined && raw.packet_count !== null) packetCount = raw.packet_count;
@@ -155,7 +257,9 @@ export async function fetchESP32Data(baseUrl = getStoredESP32Url(), timeoutMs = 
     }
 
     return {
+      mode: 'local',
       connected: true,
+      online: true,
       gatewayUrl: normalized,
       slot: 'A1',
       status: rawStatus,
@@ -170,11 +274,13 @@ export async function fetchESP32Data(baseUrl = getStoredESP32Url(), timeoutMs = 
   } catch (err) {
     clearTimeout(timer);
     return {
+      mode: 'local',
       connected: false,
+      online: false,
       gatewayUrl: normalized,
       slot: 'A1',
       status: 'OFFLINE',
-      slotStatus: 'UNKNOWN',
+      slotStatus: 'SENSOR OFFLINE',
       rssi: '--',
       snr: '--',
       packetCount: '--',

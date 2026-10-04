@@ -82,6 +82,14 @@ def run_db_migrations():
         ("payments", "payment_method VARCHAR DEFAULT 'RAZORPAY'"),
         ("payments", "transaction_reference VARCHAR"),
         ("payments", "vehicle_number VARCHAR"),
+
+        ("sensors", "rssi FLOAT DEFAULT -65.0"),
+        ("sensors", "snr FLOAT DEFAULT 9.5"),
+        ("sensors", "packet_count INTEGER DEFAULT 0"),
+        ("sensors", "heartbeat BOOLEAN DEFAULT 0"),
+        ("sensors", "status_message VARCHAR"),
+        ("sensors", "latest_status VARCHAR DEFAULT 'EMPTY'"),
+        ("sensors", "timestamp_ms INTEGER"),
     ]
     with engine.connect() as conn:
         for table, col in columns_to_add:

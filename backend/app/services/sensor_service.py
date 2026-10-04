@@ -12,7 +12,13 @@ async def update_slot_sensor_status(
     status_val: Optional[str] = None,
     mag_val: Optional[float] = None,
     vehicle_detected: Optional[bool] = None,
-    device_id_in: Optional[str] = None
+    device_id_in: Optional[str] = None,
+    rssi: Optional[float] = None,
+    snr: Optional[float] = None,
+    packet_count: Optional[int] = None,
+    heartbeat: Optional[bool] = None,
+    status_msg: Optional[str] = None,
+    timestamp_ms: Optional[int] = None
 ):
     slot = db.query(ParkingSlot).filter(ParkingSlot.id == slot_id).first()
     if not slot:
@@ -22,10 +28,11 @@ async def update_slot_sensor_status(
     today_str = now.strftime("%Y-%m-%d")
 
     # 1. Determine physical sensor vehicle detection state
+    raw_status = (status_val or "").upper().strip()
     if vehicle_detected is not None:
         veh_det = vehicle_detected
-    elif status_val:
-        veh_det = (status_val.lower() == "occupied")
+    elif raw_status:
+        veh_det = (raw_status == "OCCUPIED")
     else:
         veh_det = False
 
@@ -58,6 +65,13 @@ async def update_slot_sensor_status(
             device_id=dev_id,
             magnetic_value=final_mag,
             vehicle_detected=veh_det,
+            rssi=rssi if rssi is not None else -65.0,
+            snr=snr if snr is not None else 9.5,
+            packet_count=packet_count or 0,
+            heartbeat=heartbeat if heartbeat is not None else False,
+            status_message=status_msg or (raw_status or "OK"),
+            latest_status=raw_status or ("OCCUPIED" if veh_det else "EMPTY"),
+            timestamp_ms=timestamp_ms,
             last_updated=now
         )
         db.add(sensor)
@@ -65,6 +79,20 @@ async def update_slot_sensor_status(
         slot.sensor.device_id = dev_id
         slot.sensor.vehicle_detected = veh_det
         slot.sensor.magnetic_value = final_mag
+        if rssi is not None:
+            slot.sensor.rssi = rssi
+        if snr is not None:
+            slot.sensor.snr = snr
+        if packet_count is not None:
+            slot.sensor.packet_count = packet_count
+        if heartbeat is not None:
+            slot.sensor.heartbeat = heartbeat
+        if status_msg is not None:
+            slot.sensor.status_message = status_msg
+        if raw_status:
+            slot.sensor.latest_status = raw_status
+        if timestamp_ms is not None:
+            slot.sensor.timestamp_ms = timestamp_ms
         slot.sensor.last_updated = now
 
     db.commit()
@@ -72,18 +100,27 @@ async def update_slot_sensor_status(
 
     # 5. Broadcast real-time update via WebSocket manager
     try:
-        await manager.broadcast({
-            "type": "SLOT_UPDATE",
+        ws_payload = {
+            "type": "IOT_SENSOR_UPDATE",
             "data": {
+                "device_id": dev_id,
                 "slot_id": slot.id,
                 "parking_lot_id": slot.parking_lot_id,
                 "slot_number": slot.slot_number,
-                "status": slot.status,
+                "slot": slot.slot_number,
+                "status": "OCCUPIED" if veh_det else "AVAILABLE",
+                "slot_status": "OCCUPIED" if veh_det else "AVAILABLE",
+                "online": True,
                 "vehicle_detected": veh_det,
                 "magnetic_value": final_mag,
+                "rssi": slot.sensor.rssi if slot.sensor else rssi,
+                "snr": slot.sensor.snr if slot.sensor else snr,
+                "packet_count": slot.sensor.packet_count if slot.sensor else packet_count,
+                "heartbeat": heartbeat,
                 "last_updated": now.isoformat()
             }
-        })
+        }
+        await manager.broadcast(ws_payload)
     except Exception as ws_err:
         print(f"[WebSocket Alert] Could not broadcast sensor update: {ws_err}")
 

@@ -11,6 +11,13 @@ class Sensor(Base):
     device_id = Column(String, nullable=False, index=True)
     magnetic_value = Column(Float, default=15.2)  # dummy microtesla / mag value
     vehicle_detected = Column(Boolean, default=False)
+    rssi = Column(Float, nullable=True, default=-65.0)
+    snr = Column(Float, nullable=True, default=9.5)
+    packet_count = Column(Integer, default=0)
+    heartbeat = Column(Boolean, default=False)
+    status_message = Column(String, nullable=True)
+    latest_status = Column(String, default="EMPTY")
+    timestamp_ms = Column(Integer, nullable=True)
     last_updated = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     slot = relationship("ParkingSlot", back_populates="sensor")
