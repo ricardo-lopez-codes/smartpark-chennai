@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { X, User, History, Settings, HelpCircle, LogOut, ChevronRight, Shield, PlusCircle } from 'lucide-react';
+import { X, User, History, Settings, HelpCircle, LogOut, ChevronRight, Shield, PlusCircle, AlertOctagon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function SideMenu({ isOpen, onClose }) {
@@ -19,6 +19,7 @@ export default function SideMenu({ isOpen, onClose }) {
     { label: 'Add New Vehicle', icon: PlusCircle, path: '/account?add_vehicle=true', desc: 'Register another vehicle plate & type' },
     { label: 'Account', icon: User, path: '/account', desc: 'Manage vehicle & profile' },
     { label: 'Past Bookings', icon: History, path: '/past-bookings', desc: 'Booking history & receipts' },
+    { label: 'Fine Challans', icon: AlertOctagon, path: '/fine-challans', desc: 'Parking violation bills & fines (1.5x rent)' },
     { label: 'Admin Verification', icon: Shield, path: '/admin/verifications', desc: 'Stage 1 & Stage 2 Owner Verification' },
     { label: 'Settings', icon: Settings, path: '/settings', desc: 'Notifications & preferences' },
     { label: 'Help & Support', icon: HelpCircle, path: '/settings#help', desc: 'FAQs & GCC helpline' },

@@ -18,6 +18,7 @@ from app.api.demo import router as demo_router
 from app.api.owner import router as owner_router
 from app.api.iot import router as iot_router
 from app.api.admin import router as admin_router
+from app.api.challans import router as challans_router
 
 from app.models.notification import OwnerNotification
 
@@ -127,6 +128,7 @@ app.include_router(demo_router, prefix=settings.API_V1_STR)
 app.include_router(owner_router, prefix=settings.API_V1_STR)
 app.include_router(iot_router, prefix=settings.API_V1_STR)
 app.include_router(admin_router, prefix=settings.API_V1_STR)
+app.include_router(challans_router, prefix=settings.API_V1_STR)
 
 # Fallback /api/v1 aliases for legacy frontend clients
 app.include_router(auth_router, prefix="/api/v1")
@@ -137,6 +139,7 @@ app.include_router(bookings_router, prefix="/api/v1")
 app.include_router(owner_router, prefix="/api/v1")
 app.include_router(iot_router, prefix="/api/v1")
 app.include_router(admin_router, prefix="/api/v1")
+app.include_router(challans_router, prefix="/api/v1")
 
 @app.on_event("startup")
 def startup_event():

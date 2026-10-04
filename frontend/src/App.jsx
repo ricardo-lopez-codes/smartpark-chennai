@@ -21,6 +21,7 @@ import PaymentConfirm from './pages/PaymentConfirm';
 import BookingConfirmation from './pages/BookingConfirmation';
 import ViewBooking from './pages/ViewBooking';
 import PastBookings from './pages/PastBookings';
+import FineChallans from './pages/FineChallans';
 import Account from './pages/Account';
 import Settings from './pages/Settings';
 import AdminVerification from './pages/AdminVerification';
@@ -102,6 +103,7 @@ const AppContent = () => {
               <Route path="/booking-confirmation/:id" element={<ProtectedCivilianRoute><BookingConfirmation /></ProtectedCivilianRoute>} />
               <Route path="/view-booking/:id" element={<ProtectedCivilianRoute><ViewBooking /></ProtectedCivilianRoute>} />
               <Route path="/past-bookings" element={<ProtectedCivilianRoute><PastBookings /></ProtectedCivilianRoute>} />
+              <Route path="/fine-challans" element={<ProtectedCivilianRoute><FineChallans /></ProtectedCivilianRoute>} />
               <Route path="/account" element={<ProtectedCivilianRoute><Account /></ProtectedCivilianRoute>} />
               <Route path="/settings" element={<ProtectedCivilianRoute><Settings /></ProtectedCivilianRoute>} />
               <Route path="/admin/verifications" element={<AdminVerification />} />

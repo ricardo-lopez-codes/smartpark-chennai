@@ -7,6 +7,7 @@ from app.models.user import User
 from app.models.parking import ParkingArea, ParkingLot, ParkingSlot
 from app.models.sensor import Sensor
 from app.models.booking import Booking, Payment
+from app.models.challan import FineChallan
 from app.services.auth import get_password_hash
 
 def seed_db():
@@ -331,6 +332,65 @@ def seed_db():
                     if not lot.reservable_capacity:
                         lot.reservable_capacity = max(1, (lot.total_slots or 20) - 2)
                     db.commit()
+
+        # 9. Seed Demo Fine Challans for demo_user
+        existing_challans = db.query(FineChallan).filter(FineChallan.user_id == demo_user.id).count()
+        if existing_challans == 0:
+            now = datetime.now(timezone.utc)
+            sample_challans = [
+                FineChallan(
+                    challan_id="CH-202610-001",
+                    user_id=demo_user.id,
+                    booking_id="SP-DEMO-20261001-01",
+                    violation_type="OVERSTAY",
+                    violation_reason="Vehicle exceeded paid duration by 45 minutes without extending booking",
+                    slot_number="A2",
+                    assigned_slot_number="A2",
+                    hourly_rent_rate=40.0,
+                    fine_multiplier=1.5,
+                    fine_rate_per_hour=60.0,
+                    duration_hours=1.5,
+                    fine_amount=90.0,
+                    status="UNPAID",
+                    issued_at=now - timedelta(hours=2)
+                ),
+                FineChallan(
+                    challan_id="CH-202610-002",
+                    user_id=demo_user.id,
+                    booking_id=None,
+                    violation_type="WRONG_SLOT",
+                    violation_reason="Vehicle parked in slot A5 while system assigned slot A2",
+                    slot_number="A5",
+                    assigned_slot_number="A2",
+                    hourly_rent_rate=40.0,
+                    fine_multiplier=1.5,
+                    fine_rate_per_hour=60.0,
+                    duration_hours=1.0,
+                    fine_amount=60.0,
+                    status="UNPAID",
+                    issued_at=now - timedelta(hours=5)
+                ),
+                FineChallan(
+                    challan_id="CH-202610-003",
+                    user_id=demo_user.id,
+                    booking_id=None,
+                    violation_type="UNRESERVED_PARKING",
+                    violation_reason="Hardware LoRa sensor detected unauthorized vehicle in slot A8 with no active booking",
+                    slot_number="A8",
+                    assigned_slot_number=None,
+                    hourly_rent_rate=40.0,
+                    fine_multiplier=1.5,
+                    fine_rate_per_hour=60.0,
+                    duration_hours=2.0,
+                    fine_amount=120.0,
+                    status="PAID",
+                    issued_at=now - timedelta(days=1),
+                    paid_at=now - timedelta(days=1) + timedelta(minutes=30)
+                )
+            ]
+            for ch in sample_challans:
+                db.add(ch)
+            db.commit()
 
         print("Database seed completed successfully!")
 
